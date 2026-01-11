@@ -1,0 +1,12 @@
+[submodule "External/Submodules/SDL"]
+	path = External/Submodules/SDL
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "External/Submodules/imgui"]
+	path = External/Submodules/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "External/Submodules/freetype"]
+	path = External/Submodules/freetype
+	url = https://github.com/freetype/freetype
+[submodule "External/Submodules/rtaudio"]
+	path = External/Submodules/rtaudio
+	url = https://github.com/thestk/rtaudio.git

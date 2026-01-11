@@ -1,0 +1,21 @@
+BasedOnStyle: LLVM
+UseTab: Always
+IndentWidth: 4
+TabWidth: 4
+InsertNewlineAtEOF: true
+LineEnding: LF
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: Inline
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: false
+ColumnLimit: 0
+NamespaceIndentation: All
+IndentAccessModifiers: false
+AccessModifierOffset: -4
+PointerAlignment: Left
+SortIncludes: Never
+EmptyLineBeforeAccessModifier: Never
+SpacesInLineCommentPrefix:
+    Minimum: 0
+    Maximum: 1
