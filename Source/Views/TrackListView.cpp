@@ -258,8 +258,25 @@ void TrackListView::Render(const ImVec2& pos, float width, float height) {
 			bool solo = track->GetSolo();
 			if (solo)
 				ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(50, 200, 50, 255));
-			if (ImGui::SmallButton("S"))
-				track->SetSolo(!solo);
+			if (ImGui::SmallButton("S")) {
+				bool keyMod = ImGui::GetIO().KeyCtrl;
+
+				if (keyMod)
+					// 2. additive
+					track->SetSolo(!solo);
+				else {
+					if (solo)
+						// 3. already active + no mod: off everywhere
+						for (auto& t : project->GetTracks())
+							t->SetSolo(false);
+					else {
+						// 1. inactive + no mod: exclusive solo (this on, others off)
+						for (auto& t : project->GetTracks())
+							t->SetSolo(false);
+						track->SetSolo(true);
+					}
+				}
+			}
 			if (solo)
 				ImGui::PopStyleColor();
 
