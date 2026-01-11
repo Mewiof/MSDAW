@@ -23,6 +23,7 @@ void FormatKnobValue(char* buffer, size_t bufferSize, float value, ImGuiKnobVari
 			snprintf(buffer, bufferSize, "%.1f Hz", value); // "400.5 Hz"
 		break;
 	case ImGuiKnobVariant_Decibel:
+	case ImGuiKnobVariant_DecibelBipolar:
 		if (value > -70.0f)
 			snprintf(buffer, bufferSize, "%+.1f dB", value);
 		else
@@ -99,6 +100,8 @@ bool DrawKnob(const char* label, float* value, float min, float max, ImGuiKnobVa
 	if (isHovered && ImGui::IsMouseDoubleClicked(0)) {
 		if (variant == ImGuiKnobVariant_Hertz)
 			*value = LinearToLog(0.5f, min, max);
+		else if (variant == ImGuiKnobVariant_DecibelBipolar)
+			*value = 0.0f;
 		else
 			*value = (min + max) * 0.5f;
 		valueChanged = true;
@@ -127,7 +130,18 @@ bool DrawKnob(const char* label, float* value, float min, float max, ImGuiKnobVa
 	drawList->PathStroke(colBackgroud, 0, 3.0f);
 
 	// draw active arc
-	if (t > 0.001f) {
+	if (variant == ImGuiKnobVariant_DecibelBipolar) {
+		float tZero = (0.0f - min) / (max - min);
+		float angleZero = ANGLE_MIN + (ANGLE_MAX - ANGLE_MIN) * tZero;
+
+		// from center to current
+		if (std::abs(t - tZero) > 0.001f) {
+			float a1 = std::min(angle, angleZero);
+			float a2 = std::max(angle, angleZero);
+			drawList->PathArcTo(center, radius * 0.85f, a1, a2, 32);
+			drawList->PathStroke(colArc, 0, 3.0f);
+		}
+	} else if (t > 0.001f) {
 		drawList->PathArcTo(center, radius * 0.85f, ANGLE_MIN, angle, 32);
 		drawList->PathStroke(colArc, 0, 3.0f);
 	}
