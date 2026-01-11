@@ -368,6 +368,36 @@ void TimelineView::Render(const ImVec2& pos, float width, float height) {
 			}
 		}
 
+		// renaming
+		if (mInteraction.triggerRenamePopup) {
+			ImGui::OpenPopup("Rename Clip");
+			mInteraction.triggerRenamePopup = false;
+		}
+		if (ImGui::BeginPopupModal("Rename Clip", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+			ImGui::Text("Enter new name:");
+
+			// auto focus
+			if (ImGui::IsWindowAppearing())
+				ImGui::SetKeyboardFocusHere(0);
+
+			bool enterPressed = ImGui::InputText("##Name", mInteraction.renameBuffer, sizeof(mInteraction.renameBuffer), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+
+			ImGui::Separator();
+
+			if (ImGui::Button("Set", ImVec2(120, 0)) || enterPressed) {
+				if (mInteraction.clipToRename)
+					mInteraction.clipToRename->SetName(mInteraction.renameBuffer);
+				mInteraction.clipToRename = nullptr;
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Cancel", ImVec2(120, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+				mInteraction.clipToRename = nullptr;
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+
 		ImGui::SetCursorScreenPos(ImVec2(winPos.x, trackAreaStartY + tracks.size() * rowFullHeight));
 		ImGui::Dummy(ImVec2(contentWidth + 500.0f, 20.0f));
 	}

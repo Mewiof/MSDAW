@@ -85,6 +85,13 @@ void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionSta
 						context.state.selectedClip = newClip;
 					}
 				}
+				if (ImGui::Selectable("Rename")) {
+					interaction.clipToRename = clip;
+					strncpy(interaction.renameBuffer, clip->GetName().c_str(), sizeof(interaction.renameBuffer));
+					interaction.renameBuffer[sizeof(interaction.renameBuffer) - 1] = '\0';
+					interaction.triggerRenamePopup = true;
+					ImGui::CloseCurrentPopup();
+				}
 				auto mIDIClip = std::dynamic_pointer_cast<MIDIClip>(clip);
 				if (mIDIClip) {
 					if (ImGui::Selectable("Make Unique")) {

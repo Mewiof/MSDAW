@@ -71,6 +71,11 @@ struct TimelineInteractionState {
 
 	// clipboard
 	std::shared_ptr<Clip> clipboard;
+
+	// renaming
+	std::shared_ptr<Clip> clipToRename = nullptr;
+	bool triggerRenamePopup = false;
+	char renameBuffer[256] = "";
 };
 
 // helper to clone clips
