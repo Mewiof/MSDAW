@@ -24,8 +24,6 @@ void Project::Initialize() {
 
 	mMasterTrack = std::make_shared<Track>();
 	mMasterTrack->SetName("Master");
-
-	// create empty project
 }
 
 void Project::CreateTrack() {
@@ -61,9 +59,10 @@ void Project::MoveTrack(int srcIndex, int dstIndex, bool asChild) {
 
 	auto srcTrack = mTracks[srcIndex];
 	mTracks.erase(mTracks.begin() + srcIndex);
-	if (dstIndex > srcIndex) {
+
+	// if removed a track before destination -> shift destination index back
+	if (dstIndex > srcIndex)
 		dstIndex--;
-	}
 
 	if (asChild) {
 		if (dstIndex >= 0 && dstIndex < (int)mTracks.size()) {
@@ -73,8 +72,10 @@ void Project::MoveTrack(int srcIndex, int dstIndex, bool asChild) {
 					parent->SetGroup(true);
 				}
 				srcTrack->SetParent(parent);
+				// insert after the group header
 				mTracks.insert(mTracks.begin() + dstIndex + 1, srcTrack);
 			} else {
+				// fallback
 				mTracks.insert(mTracks.begin() + dstIndex, srcTrack);
 			}
 		} else {
@@ -82,11 +83,28 @@ void Project::MoveTrack(int srcIndex, int dstIndex, bool asChild) {
 			srcTrack->SetParent(nullptr);
 		}
 	} else {
-		srcTrack->SetParent(nullptr);
+		// normal reordering (gap drop)
+
+		// sanity
 		if (dstIndex < 0)
 			dstIndex = 0;
 		if (dstIndex > (int)mTracks.size())
 			dstIndex = (int)mTracks.size();
+
+		// instead of clearing the parent,
+		// we check the track currently residing at 'dstIndex'
+		// since we inserting before it, we should share its parent
+
+		if (dstIndex < (int)mTracks.size()) {
+			// inserting before an existing track
+			auto neighbor = mTracks[dstIndex];
+			srcTrack->SetParent(neighbor->GetParent());
+		} else {
+			// appending to the very end of the list
+			// standard behavior is to place it at the root level
+			srcTrack->SetParent(nullptr);
+		}
+
 		mTracks.insert(mTracks.begin() + dstIndex, srcTrack);
 	}
 	CheckEmptyGroups();
@@ -99,6 +117,8 @@ void Project::GroupSelectedTracks(const std::set<int>& indices) {
 
 	std::vector<std::shared_ptr<Track>> targets;
 	int minIndex = 999999;
+
+	// 1. identify insertion point & collect targets
 	for (int idx : indices) {
 		if (idx >= 0 && idx < (int)mTracks.size()) {
 			targets.push_back(mTracks[idx]);
@@ -110,20 +130,50 @@ void Project::GroupSelectedTracks(const std::set<int>& indices) {
 	if (targets.empty())
 		return;
 
+	// 2. determine common parent logic for nested grouping
+	// if all selected tracks share the same parent, the new group becomes a child of that
+	std::shared_ptr<Track> commonParent = nullptr;
+	bool firstCheck = true;
+	bool allShareParent = true;
+
+	for (auto& t : targets) {
+		if (firstCheck) {
+			commonParent = t->GetParent();
+			firstCheck = false;
+		} else {
+			if (t->GetParent() != commonParent) {
+				allShareParent = false;
+				break;
+			}
+		}
+	}
+
+	if (!allShareParent) {
+		commonParent = nullptr; // fallback to root if selection spans different hierarchy levels
+	}
+
+	// 3. create group
 	auto groupTrack = std::make_shared<Track>();
 	groupTrack->SetName("Group");
 	groupTrack->SetGroup(true);
+	if (commonParent)
+		groupTrack->SetParent(commonParent);
+
 	if (mTransport.GetSampleRate() > 0)
 		groupTrack->PrepareToPlay(mTransport.GetSampleRate());
 
+	// 4. remove from list
+	// iterate reverse to preserve indices
 	for (auto it = indices.rbegin(); it != indices.rend(); ++it) {
 		mTracks.erase(mTracks.begin() + *it);
 	}
 
+	// 5. insert group
 	if (minIndex > (int)mTracks.size())
 		minIndex = (int)mTracks.size();
 	mTracks.insert(mTracks.begin() + minIndex, groupTrack);
 
+	// 6. insert targets back as children
 	int insertPos = minIndex + 1;
 	for (auto& t : targets) {
 		t->SetParent(groupTrack);
@@ -141,9 +191,12 @@ void Project::UngroupTrack(int trackIndex) {
 	if (!track->IsGroup())
 		return;
 
+	// parent of the group being fucked
+	auto grandParent = track->GetParent();
+
 	for (auto& t : mTracks) {
 		if (t->GetParent() == track) {
-			t->SetParent(nullptr);
+			t->SetParent(grandParent); // promote to grandparent (or root)
 		}
 	}
 	mTracks.erase(mTracks.begin() + trackIndex);

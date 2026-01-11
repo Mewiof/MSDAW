@@ -59,10 +59,11 @@ void TrackListView::Render(const ImVec2& pos, float width, float height) {
 			ImGui::SetCursorPos(ImVec2(0, i * rowFullHeight));
 			ImGui::InvisibleButton("##ReorderGap", ImVec2(contentWidth, 6.0f));
 			if (ImGui::BeginDragDropTarget()) {
+				// 2. dropping internal effect
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TRACK_MOVE")) {
 					TrackMovePayload* data = (TrackMovePayload*)payload->Data;
 					if (data->srcIndex != (int)i) {
-						// move before this index, not as child
+						// move before this index, not as child (reorder in list)
 						project->MoveTrack(data->srcIndex, (int)i, false);
 					}
 				}
@@ -81,7 +82,14 @@ void TrackListView::Render(const ImVec2& pos, float width, float height) {
 			// indentation for group children
 			float indent = 0.0f;
 			if (track->GetParent()) {
+				// nesting visual depth
+				// TODO: could recurse for deeper trees
 				indent = 15.0f * mContext.state.mainScale;
+				auto p = track->GetParent();
+				while (p->GetParent()) {
+					indent += 15.0f * mContext.state.mainScale;
+					p = p->GetParent();
+				}
 			}
 
 			// background
@@ -105,7 +113,7 @@ void TrackListView::Render(const ImVec2& pos, float width, float height) {
 			ImGui::SetCursorScreenPos(ImVec2(curPos.x + indent, curPos.y));
 			ImGui::SetNextItemAllowOverlap();
 
-			// click to select / drag source / drop target for plugins
+			// click to select / drag source / drop target for plugins and grouping
 			if (ImGui::InvisibleButton("TrackSelect", ImVec2(contentWidth - indent - 45 * mContext.state.mainScale, mContext.layout.trackRowHeight))) {
 				if (ImGui::GetIO().KeyCtrl) {
 					if (mContext.state.multiSelectedTracks.count((int)i)) {
@@ -138,9 +146,19 @@ void TrackListView::Render(const ImVec2& pos, float width, float height) {
 				ImGui::EndDragDropSource();
 			}
 
-			// drop target for plugins (VST & internal)
+			// drop target
 			if (ImGui::BeginDragDropTarget()) {
-				// 1. dropping a VST from library
+				// 1. dropping a track into a group
+				if (track->IsGroup()) {
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TRACK_MOVE")) {
+						TrackMovePayload* data = (TrackMovePayload*)payload->Data;
+						if (data->srcIndex != (int)i)
+							// as child
+							project->MoveTrack(data->srcIndex, (int)i, true);
+					}
+				}
+
+				// 2. dropping a VST from library
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("VST_PLUGIN")) {
 					std::string path = (const char*)payload->Data;
 					auto vST = std::make_shared<VSTProcessor>(path);
@@ -151,7 +169,7 @@ void TrackListView::Render(const ImVec2& pos, float width, float height) {
 							vST->PrepareToPlay(project->GetTransport().GetSampleRate());
 					}
 				}
-				// 2. dropping internal effect from library
+				// 3. dropping internal effect from library
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("INTERNAL_PLUGIN")) {
 					std::string type = (const char*)payload->Data;
 					std::shared_ptr<AudioProcessor> proc = nullptr;

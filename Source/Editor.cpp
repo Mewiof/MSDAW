@@ -188,26 +188,33 @@ void Editor::OnExternalKey(int virtualKey, bool isDown) {
 #ifdef _WIN32
 	if (!isDown)
 		return;
-	Project* project = GetProject();
+	// TODO: remove this?
+#endif
+}
 
-	if (virtualKey == 'S' && (GetKeyState(VK_CONTROL) & 0x8000)) {
+void Editor::HandleGlobalShortcuts() {
+	// focus states where possible
+	if (ImGui::GetIO().WantTextInput)
+		return;
+
+	bool ctrl = ImGui::GetIO().KeyCtrl;
+
+	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
 		SaveProject();
-		return;
 	}
-	if (virtualKey == VK_SPACE) {
+
+	if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
 		TogglePlayStop();
-		return;
 	}
-	if (virtualKey == 'G' && (GetKeyState(VK_CONTROL) & 0x8000)) {
-		if (project) {
+
+	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_G, false)) {
+		if (Project* p = GetProject()) {
 			if (!mContext.state.multiSelectedTracks.empty()) {
-				project->GroupSelectedTracks(mContext.state.multiSelectedTracks);
+				p->GroupSelectedTracks(mContext.state.multiSelectedTracks);
 				mContext.state.multiSelectedTracks.clear();
 			}
 		}
-		return;
 	}
-#endif
 }
 
 void Editor::RenderMenuBar() {
@@ -229,25 +236,11 @@ void Editor::RenderMenuBar() {
 				exit(0);
 			ImGui::EndMenu();
 		}
-		if (ImGui::BeginMenu("Edit")) {
-			if (ImGui::MenuItem("Group Tracks", "Ctrl+G")) {
-				if (Project* p = GetProject()) {
-					if (!mContext.state.multiSelectedTracks.empty()) {
-						p->GroupSelectedTracks(mContext.state.multiSelectedTracks);
-						mContext.state.multiSelectedTracks.clear();
-					}
-				}
-			}
-			ImGui::EndMenu();
-		}
 		if (ImGui::BeginMenu("Windows")) {
 			if (ImGui::MenuItem("Settings", nullptr, mContext.state.showSettingsWindow)) {
 				mContext.state.showSettingsWindow = !mContext.state.showSettingsWindow;
 			}
 			ImGui::EndMenu();
-		}
-		if (ImGui::MenuItem("Computer MIDI Keyboard", "M", mContext.state.isComputerMIDIKeyboardEnabled)) {
-			mContext.state.isComputerMIDIKeyboardEnabled = !mContext.state.isComputerMIDIKeyboardEnabled;
 		}
 		ImGui::EndMainMenuBar();
 	}
@@ -258,12 +251,14 @@ void Editor::ProcessComputerKeyboardMIDI() {
 		return;
 
 #ifdef _WIN32
+	// only process raw MIDI if main window is focused
 	DWORD foregroundPid = 0;
 	HWND hWndFG = GetForegroundWindow();
 	if (hWndFG)
 		GetWindowThreadProcessId(hWndFG, &foregroundPid);
 
 	if (foregroundPid != GetCurrentProcessId()) {
+		// if not focused, release all notes
 		if (!mContext.state.activeMIDINotes.empty()) {
 			for (int note : mContext.state.activeMIDINotes)
 				mContext.engine.SendMIDIEvent(0x80, note, 0);
@@ -321,6 +316,10 @@ void Editor::ProcessComputerKeyboardMIDI() {
 		if (mIDINote > 127)
 			continue;
 
+		// skip if mod is down
+		if (GetAsyncKeyState(VK_CONTROL) & 0x8000)
+			continue;
+
 		bool isDown = (GetAsyncKeyState(mapping.vk) & 0x8000) != 0;
 		bool wasDown = mContext.state.activeMIDINotes.count(mIDINote) > 0;
 
@@ -334,18 +333,9 @@ void Editor::ProcessComputerKeyboardMIDI() {
 	}
 #else
 	// cross-platform logic
-	if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false))
-		SaveProject();
 	if (ImGui::IsKeyPressed(ImGuiKey_M, false))
 		mContext.state.isComputerMIDIKeyboardEnabled = !mContext.state.isComputerMIDIKeyboardEnabled;
-	if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_G, false)) {
-		if (Project* p = GetProject()) {
-			if (!mContext.state.multiSelectedTracks.empty()) {
-				p->GroupSelectedTracks(mContext.state.multiSelectedTracks);
-				mContext.state.multiSelectedTracks.clear();
-			}
-		}
-	}
+
 	if (!mContext.state.isComputerMIDIKeyboardEnabled) {
 		if (!mContext.state.activeMIDINotes.empty())
 			mContext.state.activeMIDINotes.clear();
@@ -370,6 +360,11 @@ void Editor::ProcessComputerKeyboardMIDI() {
 		int mIDINote = baseNote + mapping.semitoneOffset;
 		if (mIDINote > 127)
 			continue;
+
+		// skip if mod is down
+		if (ImGui::GetIO().KeyCtrl)
+			continue;
+
 		if (ImGui::IsKeyPressed(mapping.key, false)) {
 			mContext.engine.SendMIDIEvent(0x90, mIDINote, mContext.state.mIDIVelocity);
 			mContext.state.activeMIDINotes.insert(mIDINote);
@@ -455,15 +450,12 @@ void Editor::Render(const ImVec2& fullWorkPos, const ImVec2& fullWorkSize) {
 		p->SetSelectedTrack(mContext.state.selectedTrackIndex);
 	}
 
+	HandleGlobalShortcuts();
 	ProcessComputerKeyboardMIDI();
 	RenderMenuBar();
 
 	ImVec2 workPos = ImVec2(fullWorkPos.x, fullWorkPos.y);
 	ImVec2 workSize = ImVec2(fullWorkSize.x, fullWorkSize.y);
-
-	if (ImGui::IsKeyPressed(ImGuiKey_Space) && !ImGui::GetIO().WantTextInput) {
-		TogglePlayStop();
-	}
 
 	float transportH = mContext.layout.transportHeight;
 	float bottomH = mContext.layout.bottomPanelHeight;

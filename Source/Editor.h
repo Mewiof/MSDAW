@@ -53,6 +53,7 @@ private:
 	void RenderMenuBar();
 	void RenderSettingsWindow();
 	void ProcessComputerKeyboardMIDI(); // imgui input
+	void HandleGlobalShortcuts();
 	Project* GetProject();
 private:
 	EditorContext mContext;
