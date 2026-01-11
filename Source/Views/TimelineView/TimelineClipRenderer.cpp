@@ -390,6 +390,24 @@ void TimelineClipRenderer::DrawClipContent(ImDrawList* drawList,
 		}
 	}
 
-	drawList->AddText(ImVec2(pMin.x + 5, pMin.y + 5), IM_COL32(255, 255, 255, 255), clip->GetName().c_str());
+	// calculate text position
+	const char* clipName = clip->GetName().c_str();
+	ImVec2 textSize = ImGui::CalcTextSize(clipName);
+	float textPadding = 4.0f;
+
+	// start at the clip's visible left edge
+	float textX = clipRectMin.x + textPadding;
+
+	// prevent text from sliding off the right side
+	float maxTextX = pMax.x - textSize.x - textPadding;
+	if (textX > maxTextX)
+		textX = maxTextX;
+
+	// ensure we don't draw before the actual clip start (handles tiny clips)
+	if (textX < pMin.x + textPadding)
+		textX = pMin.x + textPadding;
+
+	drawList->AddText(ImVec2(textX, pMin.y + textPadding), IM_COL32(255, 255, 255, 255), clipName);
+
 	drawList->PopClipRect();
 }
