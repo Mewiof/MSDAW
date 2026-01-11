@@ -1,4 +1,4 @@
-https://github.com/user-attachments/assets/8f17f04f-4033-4e97-9566-14b5e70ea156
+https://github.com/user-attachments/assets/1edac651-7c0c-4511-9eb0-d284dfb59650
 
 **MSDAW** (short for _Mewiof's Silly Digital Audio Workstation_) is a effortless/bug-filled experiment in building an Ableton/FL Studio-like app
 
