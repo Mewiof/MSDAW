@@ -94,7 +94,32 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 		if (curve->points.empty()) {
 			float norm = (t->mSelectedAutomationParam->value - minVal) / range;
 			float yLine = trackMax.y - norm * (trackMax.y - trackMin.y);
-			drawList->AddLine(ImVec2(trackMin.x, yLine), ImVec2(trackMax.x, yLine), IM_COL32(255, 50, 50, 150), 2.0f);
+
+			// dotted line when no automation points exist
+			float dashSize = 8.0f;
+			float gapSize = 8.0f;
+			float step = dashSize + gapSize;
+
+			// clip
+			// visible x is roughly: winPos.x + scrollX to winPos.x + viewWidth + scrollX
+			float visMinX = winPos.x + scrollX;
+			float visMaxX = winPos.x + viewWidth + scrollX;
+
+			float startX = std::max(trackMin.x, visMinX);
+			float endX = std::min(trackMax.x, visMaxX);
+
+			// align the loop start to the dashed pattern relative to the track start
+			// should prevent dashes from jittering while scrolling
+			float offset = std::fmod(startX - trackMin.x, step);
+			float currX = startX - offset;
+
+			for (; currX < endX; currX += step) {
+				float x1 = std::max(currX, trackMin.x);
+				float x2 = std::min(currX + dashSize, endX);
+
+				if (x2 > x1)
+					drawList->AddLine(ImVec2(x1, yLine), ImVec2(x2, yLine), IM_COL32(255, 50, 50, 150), 2.0f);
+			}
 		} else {
 			// first segment
 			if (!curve->points.empty()) {
