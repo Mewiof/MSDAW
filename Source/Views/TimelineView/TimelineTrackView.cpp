@@ -36,15 +36,27 @@ void TimelineTrackView::RenderTracks(EditorContext& context, TimelineInteraction
 
 		// grid logic
 		if (context.state.timelineGrid > 0.0) {
-			int startBeat = (int)(scrollX / context.state.pixelsPerBeat);
-			int endBeat = (int)((scrollX + viewWidth) / context.state.pixelsPerBeat) + 1;
-			for (int b = startBeat; b <= endBeat; ++b) {
-				if (fmod((double)b, context.state.timelineGrid) < 0.001) {
-					float x = winPos.x + b * context.state.pixelsPerBeat;
-					bool isBar = (b % 4 == 0);
-					ImU32 gridCol = isBar ? IM_COL32(90, 90, 90, 80) : IM_COL32(60, 60, 60, 40);
-					drawList->AddLine(ImVec2(x, trackMin.y), ImVec2(x, trackMax.y), gridCol);
-				}
+			double grid = context.state.timelineGrid;
+
+			double startVis = scrollX / context.state.pixelsPerBeat;
+			double endVis = (scrollX + viewWidth) / context.state.pixelsPerBeat;
+
+			// avoid floating point errors
+			int startIdx = (int)floor(startVis / grid);
+			int endIdx = (int)ceil(endVis / grid);
+
+			for (int i = startIdx; i <= endIdx; ++i) {
+				double b = i * grid;
+				// skip if out of view (floor/ceil padding)
+				if (b < startVis - grid)
+					continue;
+
+				float x = winPos.x + (float)(b * context.state.pixelsPerBeat);
+
+				bool isBar = std::abs(fmod(b + 0.001, 4.0)) < 0.002;
+
+				ImU32 gridCol = isBar ? IM_COL32(90, 90, 90, 80) : IM_COL32(60, 60, 60, 40);
+				drawList->AddLine(ImVec2(x, trackMin.y), ImVec2(x, trackMax.y), gridCol);
 			}
 		}
 

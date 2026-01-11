@@ -20,20 +20,31 @@ void TimelineRuler::Render(EditorContext& context, TimelineInteractionState& int
 	if (visibleWidth < 1.0f)
 		visibleWidth = 1920.0f;
 
-	int startBeatVis = (int)(scrollX / context.state.pixelsPerBeat);
-	int endBeatVis = (int)((scrollX + visibleWidth) / context.state.pixelsPerBeat) + 1;
+	double startVis = scrollX / context.state.pixelsPerBeat;
+	double endVis = (scrollX + visibleWidth) / context.state.pixelsPerBeat;
+
+	double grid = context.state.timelineGrid > 0.0 ? context.state.timelineGrid : 1.0;
+
+	int startIdx = (int)floor(startVis / grid);
+	int endIdx = (int)ceil(endVis / grid);
 
 	// loop to draw grid lines on ruler
-	for (int b = startBeatVis; b <= endBeatVis; ++b) {
-		float x = winPos.x + b * context.state.pixelsPerBeat;
+	for (int i = startIdx; i <= endIdx; ++i) {
+		double b = i * grid;
+		float x = winPos.x + (float)(b * context.state.pixelsPerBeat);
+
 		// safety cap
 		if (x > winPos.x + contentWidth)
 			break;
+		if (x < winPos.x)
+			continue;
 
-		if (b % 4 == 0) {
+		bool isBar = std::abs(fmod(b + 0.001, 4.0)) < 0.002;
+
+		if (isBar) {
 			drawList->AddLine(ImVec2(x, winPos.y + 15), ImVec2(x, winPos.y + height), IM_COL32(150, 150, 150, 255));
 			char buf[16];
-			sprintf(buf, "%d", (b / 4) + 1);
+			sprintf(buf, "%d", (int)(b / 4) + 1);
 			drawList->AddText(ImVec2(x + 2, winPos.y), IM_COL32(150, 150, 150, 255), buf);
 		} else {
 			drawList->AddLine(ImVec2(x, winPos.y + 25), ImVec2(x, winPos.y + height), IM_COL32(100, 100, 100, 255));
