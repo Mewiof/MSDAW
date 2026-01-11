@@ -62,18 +62,47 @@ void TransportView::Render(const ImVec2& pos, float width, float height) {
 		ImGui::SameLine();
 		ImGui::Text("| Time: %.2f", (double)transport->GetPosition() / transport->GetSampleRate());
 		ImGui::SameLine();
+
+		// bpm
 		float bpm = (float)transport->GetBpm();
-		ImGui::SetNextItemWidth(80 * mContext.state.mainScale);
+		ImGui::SetNextItemWidth(60 * mContext.state.mainScale);
 		if (ImGui::DragFloat("BPM", &bpm, 1.0f, 40.0f, 300.0f, "%.1f"))
 			if (mContext.GetProject()) {
 				mContext.GetProject()->SetBpm(bpm);
 			}
+
 		ImGui::SameLine();
-		ImGui::SetNextItemWidth(80 * mContext.state.mainScale);
-		float gridSize = (float)mContext.state.timelineGrid;
-		if (ImGui::DragFloat("Grid", &gridSize, 0.25f, 0.125f, 16.0f, "%.3f")) {
-			mContext.state.timelineGrid = gridSize;
+
+		ImGui::Text("Grid");
+		ImGui::SameLine();
+
+		// numerator
+		ImGui::SetNextItemWidth(30 * mContext.state.mainScale);
+		bool gridChanged = false;
+		if (ImGui::DragInt("##GridNum", &mGridNumerator, 0.2f, 1, 64))
+			gridChanged = true;
+
+		ImGui::SameLine();
+		ImGui::Text("/");
+		ImGui::SameLine();
+
+		// denominator
+		ImGui::SetNextItemWidth(30 * mContext.state.mainScale);
+		if (ImGui::DragInt("##GridDen", &mGridDenominator, 0.2f, 1, 128))
+			gridChanged = true;
+
+		// update
+		if (gridChanged) {
+			if (mGridNumerator < 1)
+				mGridNumerator = 1;
+			if (mGridDenominator < 1)
+				mGridDenominator = 1;
+			mContext.state.timelineGrid = (double)mGridNumerator / (double)mGridDenominator;
 		}
+
+		// TODO: remove this
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Grid value: %.4f", mContext.state.timelineGrid);
 
 		// computer MIDI keyboard toggle
 		ImGui::SameLine();
