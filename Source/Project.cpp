@@ -246,9 +246,43 @@ void Project::PrepareToPlay(double sampleRate) {
 
 void Project::SetBpm(double bpm) {
 	std::lock_guard<std::mutex> lock(mMutex);
-	// 1. update transport
+
+	double oldBpm = mTransport.GetBpm();
+	double sampleRate = mTransport.GetSampleRate();
+
+	// 1. convert current position (samples) to beats using old bpm
+	// the cursor must stay at the same musical position
+	int64_t currentPos = mTransport.GetPosition();
+	double currentBeat = 0.0;
+
+	// convert loop points so the loop region doesn't shift
+	int64_t loopStart = mTransport.GetLoopStart();
+	int64_t loopEnd = mTransport.GetLoopEnd();
+	double loopStartBeat = 0.0;
+	double loopEndBeat = 0.0;
+
+	if (sampleRate > 0.0 && oldBpm > 0.0) {
+		double oldBeatsPerSecond = oldBpm / 60.0;
+		currentBeat = ((double)currentPos / sampleRate) * oldBeatsPerSecond;
+		loopStartBeat = ((double)loopStart / sampleRate) * oldBeatsPerSecond;
+		loopEndBeat = ((double)loopEnd / sampleRate) * oldBeatsPerSecond;
+	}
+
+	// 2. update transport bpm
 	mTransport.SetBpm(bpm);
-	// 2. validate audio clip tempo
+
+	// 3. convert beats back to samples using new bpm
+	if (sampleRate > 0.0 && bpm > 0.0) {
+		double newSecondsPerBeat = 60.0 / bpm;
+		int64_t newPos = (int64_t)(currentBeat * newSecondsPerBeat * sampleRate);
+		mTransport.SetPosition(newPos);
+
+		int64_t newLoopStart = (int64_t)(loopStartBeat * newSecondsPerBeat * sampleRate);
+		int64_t newLoopEnd = (int64_t)(loopEndBeat * newSecondsPerBeat * sampleRate);
+		mTransport.SetLoopRange(newLoopStart, newLoopEnd);
+	}
+
+	// 4. validate audio clip tempo
 	for (auto& track : mTracks) {
 		for (auto& clip : track->GetClips()) {
 			if (auto ac = std::dynamic_pointer_cast<AudioClip>(clip)) {
