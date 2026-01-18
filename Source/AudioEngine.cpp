@@ -114,5 +114,13 @@ int AudioEngine::OnAudioCallback(void* outputBuffer, void* inputBuffer, unsigned
 		mProject->ProcessBlock(out, nBufferFrames, 2, blockMIDIEvents);
 	}
 
+	// 4. hard clip output to prevent OS limiter ducking
+	for (unsigned int i = 0; i < nBufferFrames * 2; ++i) {
+		if (out[i] > 1.0f)
+			out[i] = 1.0f;
+		else if (out[i] < -1.0f)
+			out[i] = -1.0f;
+	}
+
 	return 0;
 }

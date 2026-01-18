@@ -273,9 +273,17 @@ void Track::Process(float* buffer, int numFrames, int numChannels,
 	float db = mVolumeParam->value;
 	float gain = std::pow(10.0f, db / 20.0f);
 	float pan = mPanParam->value;
-	float panAngle = (pan + 1.0f) * (3.14159f / 4.0f);
-	float gainL = std::cos(panAngle) * gain;
-	float gainR = std::sin(panAngle) * gain;
+	// stereo balance mode (0dB center)
+	// imported clips must play at their original loudness when centered
+	float gainL = gain;
+	float gainR = gain;
+	if (pan > 0.0f) {
+		// panning right: attenuate left
+		gainL *= (1.0f - pan);
+	} else if (pan < 0.0f) {
+		// panning left: attenuate right
+		gainR *= (1.0f + pan);
+	}
 
 	float currentPeakL = 0.0f;
 	float currentPeakR = 0.0f;
