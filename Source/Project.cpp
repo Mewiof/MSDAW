@@ -293,17 +293,36 @@ void Project::SetBpm(double bpm) {
 }
 
 void Project::ProcessTrackRecursively(std::shared_ptr<Track> track, float* destinationBuffer, int numFrames, int numChannels, const ProcessContext& context, const std::vector<MIDIMessage>& liveMIDIEvents, bool anySolo) {
-	if (track->GetMute() && !track->GetSolo())
+
+	// determine if this track is "effectively soloed".
+	// includes explicit/inheriting solo from an ancestor
+	bool ancestorSolo = false;
+	auto p = track->GetParent();
+	while (p) {
+		if (p->GetSolo()) {
+			ancestorSolo = true;
+			break;
+		}
+		p = p->GetParent();
+	}
+
+	bool isEffectiveSolo = track->GetSolo() || ancestorSolo;
+
+	// must be soloed to bypass mute
+	if (track->GetMute() && !isEffectiveSolo)
 		return;
-	if (anySolo && !track->GetSolo()) {
+
+	// global check
+	if (anySolo && !isEffectiveSolo) {
 		bool childSolo = false;
 		if (track->IsGroup()) {
-			for (auto& t : mTracks) {
+			// if we are a group, we must remain active if any child is soloed
+			// TODO: for deep nested soloing this would need to be recursive?
+			for (auto& t : mTracks)
 				if (t->GetParent() == track && t->GetSolo()) {
 					childSolo = true;
 					break;
 				}
-			}
 		}
 		if (!childSolo)
 			return;
