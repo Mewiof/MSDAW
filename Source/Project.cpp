@@ -8,6 +8,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <functional>
 
 // version history
 const int kCurrentProjectVersion = 1; // 1: initial format
@@ -316,13 +317,19 @@ void Project::ProcessTrackRecursively(std::shared_ptr<Track> track, float* desti
 	if (anySolo && !isEffectiveSolo) {
 		bool childSolo = false;
 		if (track->IsGroup()) {
-			// if we are a group, we must remain active if any child is soloed
-			// TODO: for deep nested soloing this would need to be recursive?
-			for (auto& t : mTracks)
-				if (t->GetParent() == track && t->GetSolo()) {
-					childSolo = true;
-					break;
-				}
+			// recursively check if any descendant is soloed
+			// keep the group chain active so the signal from the deep child can bubble up
+			std::function<bool(std::shared_ptr<Track>)> hasSoloChild = [&](std::shared_ptr<Track> parent) -> bool {
+				for (const auto& t : mTracks)
+					if (t->GetParent() == parent) {
+						if (t->GetSolo())
+							return true;
+						if (t->IsGroup() && hasSoloChild(t))
+							return true;
+					}
+				return false;
+			};
+			childSolo = hasSoloChild(track);
 		}
 		if (!childSolo)
 			return;
