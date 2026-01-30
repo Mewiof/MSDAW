@@ -33,6 +33,9 @@ void Editor::Init(float scale) {
 	mContext.state.mainScale = scale;
 	mContext.layout.Scale(scale);
 	mContext.state.pixelsPerBeat *= scale;
+
+	// scan for VSTs on startup
+	mContext.pluginManager.ScanPlugins();
 }
 
 Project* Editor::GetProject() {
