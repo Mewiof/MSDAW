@@ -6,9 +6,18 @@
 #include <algorithm>
 
 void ClipView::Render(const ImVec2& pos, float width, float height) {
+	ImVec2 defaultPadding = ImGui::GetStyle().WindowPadding;
+	// prevent double-padding issues with full-size children
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
 	ImGui::SetNextWindowPos(pos);
 	ImGui::SetNextWindowSize(ImVec2(width, height));
 	ImGui::Begin("Clip View", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+
+	// restore padding for content
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, defaultPadding);
+	ImGui::BeginChild("ClipContent", ImVec2(width, height), false, ImGuiWindowFlags_None);
+	ImGui::PopStyleVar();
 
 	auto clip = mContext.state.selectedClip;
 
@@ -16,7 +25,9 @@ void ClipView::Render(const ImVec2& pos, float width, float height) {
 		float txtW = ImGui::CalcTextSize("No Clip Selected").x;
 		ImGui::SetCursorPos(ImVec2(width * 0.5f - txtW * 0.5f, height * 0.5f - 10.0f));
 		ImGui::TextDisabled("No Clip Selected");
+		ImGui::EndChild();
 		ImGui::End();
+		ImGui::PopStyleVar();
 		return;
 	}
 
@@ -112,5 +123,7 @@ void ClipView::Render(const ImVec2& pos, float width, float height) {
 		ImGui::TextDisabled("Use Piano Roll to edit notes.");
 	}
 
+	ImGui::EndChild();
 	ImGui::End();
+	ImGui::PopStyleVar();
 }

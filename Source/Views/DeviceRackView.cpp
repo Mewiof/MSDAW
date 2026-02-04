@@ -64,6 +64,10 @@ static std::shared_ptr<AudioProcessor> CloneProcessor(std::shared_ptr<AudioProce
 // render implementation
 
 void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
+	ImVec2 defaultPadding = ImGui::GetStyle().WindowPadding;
+	// prevent double-padding issues with full-size children
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
 	ImGui::SetNextWindowPos(pos);
 	ImGui::SetNextWindowSize(ImVec2(width, height));
 	ImGui::Begin("Device Rack", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -208,7 +212,9 @@ void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
 			if (pId == "DelayReverb")
 				deviceWidth = 320.0f * mContext.state.mainScale;
 
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, defaultPadding);
 			ImGui::BeginChild("DeviceBody", ImVec2(deviceWidth, height), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+			ImGui::PopStyleVar();
 
 			// header: enable toggle & name
 			ImGui::BeginGroup();
@@ -343,4 +349,5 @@ void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
 		ImGui::TextDisabled("No Track Selected. Select a track to view devices.");
 	}
 	ImGui::End();
+	ImGui::PopStyleVar();
 }
