@@ -1,12 +1,8 @@
 #include "PrecompHeader.h"
 #include "TimelineView.h"
 #include "Project.h"
+#include "ProcessorFactory.h"
 #include "Processors/VSTProcessor.h"
-#include "Processors/SimpleSynth.h"
-#include "Processors/BitCrusherProcessor.h"
-#include "Processors/EqProcessor.h"
-#include "Processors/OTTProcessor.h"
-#include "Processors/DelayReverbProcessor.h"
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
@@ -208,18 +204,7 @@ void TimelineView::Render(const ImVec2& pos, float width, float height) {
 			}
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("INTERNAL_PLUGIN")) {
 				std::string type = (const char*)payload->Data;
-				std::shared_ptr<AudioProcessor> proc = nullptr;
-
-				if (type == "SimpleSynth")
-					proc = std::make_shared<SimpleSynth>();
-				else if (type == "BitCrusher")
-					proc = std::make_shared<BitCrusherProcessor>();
-				else if (type == "EqEight")
-					proc = std::make_shared<EqProcessor>();
-				else if (type == "OTT")
-					proc = std::make_shared<OTTProcessor>();
-				else if (type == "DelayReverb")
-					proc = std::make_shared<DelayReverbProcessor>();
+				std::shared_ptr<AudioProcessor> proc = ProcessorFactory::Instance().Create(type);
 
 				if (proc) {
 					project->CreateTrack();

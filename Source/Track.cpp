@@ -3,11 +3,7 @@
 
 #include "Clips/MIDIClip.h"
 #include "Clips/AudioClip.h"
-#include "Processors/SimpleSynth.h"
-#include "Processors/BitCrusherProcessor.h"
-#include "Processors/EqProcessor.h"
-#include "Processors/OTTProcessor.h"
-#include "Processors/DelayReverbProcessor.h"
+#include "ProcessorFactory.h"
 #include "Processors/VSTProcessor.h"
 #include <cmath>
 #include <algorithm>
@@ -574,19 +570,10 @@ void Track::Load(std::istream& in) {
 			ss >> type;
 			std::shared_ptr<AudioProcessor> proc = nullptr;
 
-			if (type == "SimpleSynth")
-				proc = std::make_shared<SimpleSynth>();
-			else if (type == "BitCrusher")
-				proc = std::make_shared<BitCrusherProcessor>();
-			else if (type == "EqEight")
-				proc = std::make_shared<EqProcessor>();
-			else if (type == "OTT")
-				proc = std::make_shared<OTTProcessor>();
-			else if (type == "DelayReverb")
-				proc = std::make_shared<DelayReverbProcessor>();
-			else if (type == "VST") {
+			proc = ProcessorFactory::Instance().Create(type);
+			// VST is special
+			if (!proc && type == "VST")
 				proc = std::make_shared<VSTProcessor>("");
-			}
 
 			if (proc) {
 				proc->Load(in);

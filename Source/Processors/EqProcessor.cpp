@@ -1,5 +1,6 @@
 #include "PrecompHeader.h"
 #include "EqProcessor.h"
+#include "ProcessorFactory.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
@@ -7,6 +8,8 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "Widgets.h"
+
+REGISTER_PROCESSOR(EqProcessor, "EqEight", false)
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846

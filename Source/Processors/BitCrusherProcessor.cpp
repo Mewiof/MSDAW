@@ -1,7 +1,10 @@
 #include "PrecompHeader.h"
 #include "BitCrusherProcessor.h"
+#include "ProcessorFactory.h"
 #include <cmath>
 #include <algorithm>
+
+REGISTER_PROCESSOR(BitCrusherProcessor, "BitCrusher", false)
 
 BitCrusherProcessor::BitCrusherProcessor() {
 	pBitDepth = AddParameter("Bits", 24.0f, 1.0f, 24.0f);

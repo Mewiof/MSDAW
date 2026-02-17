@@ -1,8 +1,11 @@
 #include "PrecompHeader.h"
 #include "OTTProcessor.h"
+#include "ProcessorFactory.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
+
+REGISTER_PROCESSOR(OTTProcessor, "OTT", false)
 
 // TODO: this fuck is shit
 

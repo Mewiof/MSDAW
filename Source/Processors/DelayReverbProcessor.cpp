@@ -1,10 +1,13 @@
 #include "PrecompHeader.h"
 #include "DelayReverbProcessor.h"
+#include "ProcessorFactory.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
 #include "imgui.h"
 #include "Widgets.h"
+
+REGISTER_PROCESSOR(DelayReverbProcessor, "DelayReverb", false)
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846

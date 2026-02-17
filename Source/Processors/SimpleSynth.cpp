@@ -1,7 +1,10 @@
 #include "PrecompHeader.h"
 #include "SimpleSynth.h"
+#include "ProcessorFactory.h"
 #include <cmath>
 #include <algorithm>
+
+REGISTER_PROCESSOR(SimpleSynth, "SimpleSynth", true)
 
 SimpleSynth::SimpleSynth() {
 	// initialize parameters
