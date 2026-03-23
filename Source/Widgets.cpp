@@ -96,16 +96,16 @@ bool DrawKnob(const char* label, float* value, float min, float max, ImGuiKnobVa
 		valueChanged = true;
 	}
 
-	// double click reset
-	if (isHovered && ImGui::IsMouseDoubleClicked(0)) {
-		if (variant == ImGuiKnobVariant_Hertz)
-			*value = LinearToLog(0.5f, min, max);
-		else if (variant == ImGuiKnobVariant_DecibelBipolar)
-			*value = 0.0f;
-		else
-			*value = (min + max) * 0.5f;
-		valueChanged = true;
-	}
+	// // double click reset
+	// if (isHovered && ImGui::IsMouseDoubleClicked(0)) {
+	// 	if (variant == ImGuiKnobVariant_Hertz)
+	// 		*value = LinearToLog(0.5f, min, max);
+	// 	else if (variant == ImGuiKnobVariant_DecibelBipolar)
+	// 		*value = 0.0f;
+	// 	else
+	// 		*value = (min + max) * 0.5f;
+	// 	valueChanged = true;
+	// }
 
 	// 3. visualization
 	float angle = ANGLE_MIN + (ANGLE_MAX - ANGLE_MIN) * t;

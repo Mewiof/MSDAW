@@ -1,3 +1,4 @@
+#include "Parameters/SliderParameter.h"
 #include "PrecompHeader.h"
 #include "OTTProcessor.h"
 #include "ProcessorFactory.h"
@@ -107,14 +108,14 @@ float OTTProcessor::CompressorBand::GetGainForSample(float sample, float timeSca
 // main processor
 
 OTTProcessor::OTTProcessor() {
-	pDepth = AddParameter("Depth", 1.0f, 0.0f, 1.0f);
-	pTime = AddParameter("Time", 1.0f, 0.1f, 10.0f);
-	pInGain = AddParameter("In Gain", 0.0f, -24.0f, 24.0f);
-	pOutGain = AddParameter("Out Gain", 0.0f, -24.0f, 24.0f);
+	pDepth = AddParameter(std::make_unique<SliderParameter>("Depth", 1.0f, 0.0f, 1.0f));
+	pTime = AddParameter(std::make_unique<SliderParameter>("Time", 1.0f, 0.1f, 10.0f));
+	pInGain = AddParameter(std::make_unique<SliderParameter>("In Gain", 0.0f, -24.0f, 24.0f));
+	pOutGain = AddParameter(std::make_unique<SliderParameter>("Out Gain", 0.0f, -24.0f, 24.0f));
 
-	pLowGain = AddParameter("Low Gain", 0.0f, -12.0f, 12.0f);
-	pMidGain = AddParameter("Mid Gain", 0.0f, -12.0f, 12.0f);
-	pHighGain = AddParameter("High Gain", 0.0f, -12.0f, 12.0f);
+	pLowGain = AddParameter(std::make_unique<SliderParameter>("Low Gain", 0.0f, -12.0f, 12.0f));
+	pMidGain = AddParameter(std::make_unique<SliderParameter>("Mid Gain", 0.0f, -12.0f, 12.0f));
+	pHighGain = AddParameter(std::make_unique<SliderParameter>("High Gain", 0.0f, -12.0f, 12.0f));
 }
 
 void OTTProcessor::PrepareToPlay(double sampleRate) {

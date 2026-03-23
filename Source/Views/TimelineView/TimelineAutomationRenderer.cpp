@@ -73,8 +73,8 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 	// draw & interact with automation curve
 	if (t->mSelectedAutomationParam) {
 		AutomationCurve* curve = t->GetAutomationCurve(t->mSelectedAutomationParam);
-		float minVal = t->mSelectedAutomationParam->minVal;
-		float maxVal = t->mSelectedAutomationParam->maxVal;
+		float minVal = t->mSelectedAutomationParam->minValue;
+		float maxVal = t->mSelectedAutomationParam->maxValue;
 		float range = maxVal - minVal;
 
 		ImVec2 mousePos = ImGui::GetMousePos();

@@ -298,10 +298,9 @@ void TrackListView::Render(const ImVec2& pos, float width, float height) {
 			// volume slider
 			ImGui::SetCursorScreenPos(ImVec2(curPos.x + indent + 15 * mContext.state.mainScale, curPos.y + 45 * mContext.state.mainScale));
 			ImGui::SetNextItemWidth(100 * mContext.state.mainScale);
-			float vol = track->GetVolumeParameter()->value;
-			if (ImGui::SliderFloat("##Vol", &vol, -60.0f, 6.0f, "%.1f dB")) {
-				track->GetVolumeParameter()->value = vol;
-			}
+			ImGui::SliderFloat("##Vol", &track->GetVolumeParameter()->value, -60.0f, 6.0f, "%.1f dB");
+			// manually invoke
+			track->GetVolumeParameter()->HandleCommonInteractions();
 
 			// volume meter (vertical bar)
 			// render on the right side of the track header

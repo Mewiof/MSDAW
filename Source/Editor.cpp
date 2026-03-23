@@ -1,6 +1,7 @@
 #include "PrecompHeader.h"
 #include "Editor.h"
 #include "Processors/VSTProcessor.h"
+
 #include <filesystem>
 #include <algorithm>
 #include <fstream>
@@ -528,4 +529,18 @@ void Editor::Render(const ImVec2& fullWorkPos, const ImVec2& fullWorkSize) {
 		}
 		mContext.state.processDrop = false;
 	}
+
+	Parameter* requestedParameter = Parameter::GetAndClearAutomationRequestParameter();
+	if (requestedParameter)
+		if (Project* p = GetProject())
+			for (size_t i = 0; i < p->GetTracks().size(); ++i) {
+				auto track = p->GetTracks()[i];
+				auto params = track->GetAllParameters();
+				if (std::find(params.begin(), params.end(), requestedParameter) != params.end()) {
+					track->mShowAutomation = true;
+					track->mSelectedAutomationParam = requestedParameter;
+					mContext.state.selectedTrackIndex = (int)i;
+					break;
+				}
+			}
 }

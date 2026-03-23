@@ -1,3 +1,4 @@
+#include "Parameters/SliderParameter.h"
 #include "PrecompHeader.h"
 #include "DelayReverbProcessor.h"
 #include "ProcessorFactory.h"
@@ -90,18 +91,18 @@ float AllPassFilter::Process(float input) {
 
 DelayReverbProcessor::DelayReverbProcessor() {
 	// delay params
-	pDelayTime = AddParameter("Time", 250.0f, 1.0f, 2000.0f); // ms
-	pDelayFeedback = AddParameter("Feed", 0.4f, 0.0f, 1.1f);
-	pDelayPingPong = AddParameter("Pong", 0.0f, 0.0f, 1.0f);
-	pDelayLowCut = AddParameter("LoCut", 100.0f, 20.0f, 1000.0f);
-	pDelayHighCut = AddParameter("HiCut", 5000.0f, 1000.0f, 20000.0f);
-	pDelayMix = AddParameter("D.Mix", 0.3f, 0.0f, 1.0f);
+	pDelayTime = AddParameter(std::make_unique<SliderParameter>("Time", 250.0f, 1.0f, 2000.0f)); // ms
+	pDelayFeedback = AddParameter(std::make_unique<SliderParameter>("Feed", 0.4f, 0.0f, 1.1f));
+	pDelayPingPong = AddParameter(std::make_unique<SliderParameter>("Pong", 0.0f, 0.0f, 1.0f));
+	pDelayLowCut = AddParameter(std::make_unique<SliderParameter>("LoCut", 100.0f, 20.0f, 1000.0f));
+	pDelayHighCut = AddParameter(std::make_unique<SliderParameter>("HiCut", 5000.0f, 1000.0f, 20000.0f));
+	pDelayMix = AddParameter(std::make_unique<SliderParameter>("D.Mix", 0.3f, 0.0f, 1.0f));
 
 	// reverb params
-	pRevSize = AddParameter("Size", 1.0f, 0.5f, 2.0f);
-	pRevDecay = AddParameter("Decay", 0.85f, 0.0f, 0.98f);
-	pRevDamp = AddParameter("Damp", 0.2f, 0.0f, 1.0f);
-	pRevMix = AddParameter("R.Mix", 0.2f, 0.0f, 1.0f);
+	pRevSize = AddParameter(std::make_unique<SliderParameter>("Size", 1.0f, 0.5f, 2.0f));
+	pRevDecay = AddParameter(std::make_unique<SliderParameter>("Decay", 0.85f, 0.0f, 0.98f));
+	pRevDamp = AddParameter(std::make_unique<SliderParameter>("Damp", 0.2f, 0.0f, 1.0f));
+	pRevMix = AddParameter(std::make_unique<SliderParameter>("R.Mix", 0.2f, 0.0f, 1.0f));
 }
 
 void DelayReverbProcessor::PrepareToPlay(double sampleRate) {
@@ -330,9 +331,9 @@ bool DelayReverbProcessor::RenderCustomUI(const ImVec2& size) {
 
 	ImGui::BeginGroup();
 	ImGui::TextDisabled("Delay");
-	DrawKnob("Time", &pDelayTime->value, pDelayTime->minVal, pDelayTime->maxVal);
+	DrawKnob("Time", &pDelayTime->value, pDelayTime->minValue, pDelayTime->maxValue);
 	ImGui::Dummy(ImVec2(0, 5));
-	DrawKnob("Feed", &pDelayFeedback->value, pDelayFeedback->minVal, pDelayFeedback->maxVal);
+	DrawKnob("Feed", &pDelayFeedback->value, pDelayFeedback->minValue, pDelayFeedback->maxValue);
 	ImGui::Dummy(ImVec2(0, 5));
 	DrawKnob("Mix", &pDelayMix->value, 0.0f, 1.0f);
 	ImGui::EndGroup();
@@ -343,9 +344,9 @@ bool DelayReverbProcessor::RenderCustomUI(const ImVec2& size) {
 
 	ImGui::BeginGroup();
 	ImGui::TextDisabled("Reverb");
-	DrawKnob("Decay", &pRevDecay->value, pRevDecay->minVal, pRevDecay->maxVal);
+	DrawKnob("Decay", &pRevDecay->value, pRevDecay->minValue, pRevDecay->maxValue);
 	ImGui::Dummy(ImVec2(0, 5));
-	DrawKnob("Size", &pRevSize->value, pRevSize->minVal, pRevSize->maxVal);
+	DrawKnob("Size", &pRevSize->value, pRevSize->minValue, pRevSize->maxValue);
 	ImGui::Dummy(ImVec2(0, 5));
 	DrawKnob("Mix", &pRevMix->value, 0.0f, 1.0f);
 	ImGui::EndGroup();
@@ -355,9 +356,9 @@ bool DelayReverbProcessor::RenderCustomUI(const ImVec2& size) {
 	ImGui::SameLine();
 	ImGui::BeginGroup();
 	ImGui::TextDisabled("EQ/Misc");
-	DrawKnob("LoCut", &pDelayLowCut->value, pDelayLowCut->minVal, pDelayLowCut->maxVal);
+	DrawKnob("LoCut", &pDelayLowCut->value, pDelayLowCut->minValue, pDelayLowCut->maxValue);
 	ImGui::Dummy(ImVec2(0, 5));
-	DrawKnob("HiCut", &pDelayHighCut->value, pDelayHighCut->minVal, pDelayHighCut->maxVal);
+	DrawKnob("HiCut", &pDelayHighCut->value, pDelayHighCut->minValue, pDelayHighCut->maxValue);
 	ImGui::Dummy(ImVec2(0, 5));
 	bool pp = pDelayPingPong->value > 0.5f;
 	if (ImGui::Checkbox("Pong", &pp))

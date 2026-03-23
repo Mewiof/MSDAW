@@ -1,3 +1,4 @@
+#include "Parameters/SliderParameter.h"
 #include "PrecompHeader.h"
 #include "EqProcessor.h"
 #include "ProcessorFactory.h"
@@ -101,17 +102,17 @@ EqProcessor::EqProcessor() {
 			defaultFreq = 10000.0f + (i - 4) * 2000.0f;
 		}
 
-		mBands[i].pActive = AddParameter(prefix + "On", defaultOn, 0.0f, 1.0f);
-		mBands[i].pType = AddParameter(prefix + "Type", defaultType, 0.0f, 4.0f);
-		mBands[i].pFreq = AddParameter(prefix + "Freq", defaultFreq, 10.0f, 22000.0f);
-		mBands[i].pGain = AddParameter(prefix + "Gain", 0.0f, -15.0f, 15.0f);
-		mBands[i].pQ = AddParameter(prefix + "Q", defaultQ, 0.1f, 18.0f);
+		mBands[i].pActive = AddParameter(std::make_unique<SliderParameter>(prefix + "On", defaultOn, 0.0f, 1.0f));
+		mBands[i].pType = AddParameter(std::make_unique<SliderParameter>(prefix + "Type", defaultType, 0.0f, 4.0f));
+		mBands[i].pFreq = AddParameter(std::make_unique<SliderParameter>(prefix + "Freq", defaultFreq, 10.0f, 22000.0f));
+		mBands[i].pGain = AddParameter(std::make_unique<SliderParameter>(prefix + "Gain", 0.0f, -15.0f, 15.0f));
+		mBands[i].pQ = AddParameter(std::make_unique<SliderParameter>(prefix + "Q", defaultQ, 0.1f, 18.0f));
 	}
 
-	pGlobalGain = AddParameter("Output", 0.0f, -24.0f, 24.0f);
-	pScale = AddParameter("Scale", 100.0f, 0.0f, 200.0f);
-	pAdaptQ = AddParameter("AdaptQ", 0.0f, 0.0f, 1.0f);
-	pMode = AddParameter("Mode", 0.0f, 0.0f, 4.0f);
+	pGlobalGain = AddParameter(std::make_unique<SliderParameter>("Output", 0.0f, -24.0f, 24.0f));
+	pScale = AddParameter(std::make_unique<SliderParameter>("Scale", 100.0f, 0.0f, 200.0f));
+	pAdaptQ = AddParameter(std::make_unique<SliderParameter>("AdaptQ", 0.0f, 0.0f, 1.0f));
+	pMode = AddParameter(std::make_unique<SliderParameter>("Mode", 0.0f, 0.0f, 4.0f));
 
 	mSelectedBandIndex = 0;
 }

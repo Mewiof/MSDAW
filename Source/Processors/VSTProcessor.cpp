@@ -1,3 +1,4 @@
+#include "Parameters/SliderParameter.h"
 #include "PrecompHeader.h"
 #include "VSTProcessor.h"
 #include <iostream>
@@ -204,7 +205,7 @@ void VSTProcessor::InitializeParameters() {
 			name = "Param " + std::to_string(i);
 
 		float val = mAEffect->getParameter(mAEffect, i);
-		AddParameter(name, val, 0.0f, 1.0f);
+		AddParameter(std::make_unique<SliderParameter>(name, val, 0.0f, 1.0f));
 		mLastSentValues.push_back(val);
 	}
 }

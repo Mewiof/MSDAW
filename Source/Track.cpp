@@ -1,3 +1,4 @@
+#include "Parameters/SliderParameter.h"
 #include "PrecompHeader.h"
 #include "Track.h"
 
@@ -52,8 +53,8 @@ float AutomationCurve::Evaluate(double beat) const {
 
 Track::Track() {
 
-	mVolumeParam = std::make_unique<Parameter>("Volume", 0.0f, -60.0f, 6.0f);
-	mPanParam = std::make_unique<Parameter>("Pan", 0.0f, -1.0f, 1.0f);
+	mVolumeParam = std::make_unique<SliderParameter>("Volume", 0.0f, -60.0f, 6.0f);
+	mPanParam = std::make_unique<SliderParameter>("Pan", 0.0f, -1.0f, 1.0f);
 	int r = 100 + rand() % 155;
 	int g = 100 + rand() % 155;
 	int b = 100 + rand() % 155;

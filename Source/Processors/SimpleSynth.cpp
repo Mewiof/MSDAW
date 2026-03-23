@@ -1,3 +1,4 @@
+#include "Parameters/SliderParameter.h"
 #include "PrecompHeader.h"
 #include "SimpleSynth.h"
 #include "ProcessorFactory.h"
@@ -8,9 +9,9 @@ REGISTER_PROCESSOR(SimpleSynth, "SimpleSynth", true)
 
 SimpleSynth::SimpleSynth() {
 	// initialize parameters
-	pAttack = AddParameter("Attack", 0.05f, 0.001f, 2.0f);
-	pRelease = AddParameter("Release", 0.2f, 0.001f, 5.0f);
-	pGain = AddParameter("Gain", 0.5f, 0.0f, 1.0f);
+	pAttack = AddParameter(std::make_unique<SliderParameter>("Attack", 0.05f, 0.001f, 2.0f));
+	pRelease = AddParameter(std::make_unique<SliderParameter>("Release", 0.2f, 0.001f, 5.0f));
+	pGain = AddParameter(std::make_unique<SliderParameter>("Gain", 0.5f, 0.0f, 1.0f));
 
 	for (auto& v : mVoices) {
 		v.active = false;

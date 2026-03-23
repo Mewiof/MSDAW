@@ -5,18 +5,7 @@
 #include <iostream>
 #include <iomanip>
 #include "MIDITypes.h"
-#include "imgui.h"
-
-// parameter structure for ui/audio interaction
-struct Parameter {
-	std::string name;
-	float value;
-	float minVal;
-	float maxVal;
-
-	Parameter(const std::string& n, float val, float min, float max)
-		: name(n), value(val), minVal(min), maxVal(max) {}
-};
+#include "Parameter.h"
 
 // process context with transport information
 struct ProcessContext {
@@ -107,9 +96,10 @@ protected:
 	std::vector<std::unique_ptr<Parameter>> mParameters;
 	bool mIsBypassed = false;
 
-	// create parameter helper
-	Parameter* AddParameter(const std::string& name, float defaultVal, float minVal, float maxVal) {
-		mParameters.push_back(std::make_unique<Parameter>(name, defaultVal, minVal, maxVal));
-		return mParameters.back().get();
+	template <typename T>
+	T* AddParameter(std::unique_ptr<T> parameter) {
+		T* p = parameter.get();
+		mParameters.push_back(std::move(parameter));
+		return p;
 	}
 };

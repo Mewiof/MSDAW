@@ -270,11 +270,8 @@ void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
 			if (!proc->IsBypassed()) {
 				if (!proc->RenderCustomUI(avail)) {
 					ImGui::BeginChild("ParamsScroll", ImVec2(0, 0));
-					for (auto& param : proc->GetParameters()) {
-						ImGui::Text("%s", param->name.c_str());
-						ImGui::SetNextItemWidth(-1);
-						ImGui::SliderFloat(("##" + param->name).c_str(), &param->value, param->minVal, param->maxVal, "%.3f");
-					}
+					for (auto& param : proc->GetParameters())
+						param->Draw();
 					ImGui::EndChild();
 				}
 			} else {

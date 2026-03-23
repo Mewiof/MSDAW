@@ -1,3 +1,4 @@
+#include "Parameters/SliderParameter.h"
 #include "PrecompHeader.h"
 #include "BitCrusherProcessor.h"
 #include "ProcessorFactory.h"
@@ -7,9 +8,9 @@
 REGISTER_PROCESSOR(BitCrusherProcessor, "BitCrusher", false)
 
 BitCrusherProcessor::BitCrusherProcessor() {
-	pBitDepth = AddParameter("Bits", 24.0f, 1.0f, 24.0f);
-	pDownsample = AddParameter("Downsample", 1.0f, 1.0f, 40.0f);
-	pDrive = AddParameter("Drive dB", 0.0f, 0.0f, 30.0f);
+	pBitDepth = AddParameter(std::make_unique<SliderParameter>("Bits", 24.0f, 1.0f, 24.0f));
+	pDownsample = AddParameter(std::make_unique<SliderParameter>("Downsample", 1.0f, 1.0f, 40.0f));
+	pDrive = AddParameter(std::make_unique<SliderParameter>("Drive dB", 0.0f, 0.0f, 30.0f));
 }
 
 void BitCrusherProcessor::PrepareToPlay(double sampleRate) {

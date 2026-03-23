@@ -10,14 +10,6 @@
 #include "Track.h"
 #include "imgui.h"
 
-// imgui math helpers
-static inline ImVec2 operator+(const ImVec2& lhs, const ImVec2& rhs) {
-	return ImVec2(lhs.x + rhs.x, lhs.y + rhs.y);
-}
-static inline ImVec2 operator-(const ImVec2& lhs, const ImVec2& rhs) {
-	return ImVec2(lhs.x - rhs.x, lhs.y - rhs.y);
-}
-
 struct EditorLayout {
 	float transportHeight = 60.0f;
 	float bottomPanelHeight = 220.0f;
