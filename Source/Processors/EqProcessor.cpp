@@ -1,4 +1,5 @@
 #include "Parameters/SliderParameter.h"
+#include "Parameters/KnobParameter.h"
 #include "PrecompHeader.h"
 #include "EqProcessor.h"
 #include "ProcessorFactory.h"
@@ -8,7 +9,6 @@
 #include <string>
 #include "imgui.h"
 #include "imgui_internal.h"
-#include "Widgets.h"
 
 REGISTER_PROCESSOR(EqProcessor, "EqEight", false)
 
@@ -104,13 +104,13 @@ EqProcessor::EqProcessor() {
 
 		mBands[i].pActive = AddParameter(std::make_unique<SliderParameter>(prefix + "On", defaultOn, 0.0f, 1.0f));
 		mBands[i].pType = AddParameter(std::make_unique<SliderParameter>(prefix + "Type", defaultType, 0.0f, 4.0f));
-		mBands[i].pFreq = AddParameter(std::make_unique<SliderParameter>(prefix + "Freq", defaultFreq, 10.0f, 22000.0f));
-		mBands[i].pGain = AddParameter(std::make_unique<SliderParameter>(prefix + "Gain", 0.0f, -15.0f, 15.0f));
-		mBands[i].pQ = AddParameter(std::make_unique<SliderParameter>(prefix + "Q", defaultQ, 0.1f, 18.0f));
+		mBands[i].pFreq = AddParameter(std::make_unique<KnobParameter>(prefix + "Freq", defaultFreq, 10.0f, 22000.0f, ImGuiKnobVariant_Hertz));
+		mBands[i].pGain = AddParameter(std::make_unique<KnobParameter>(prefix + "Gain", 0.0f, -15.0f, 15.0f, ImGuiKnobVariant_Decibel));
+		mBands[i].pQ = AddParameter(std::make_unique<KnobParameter>(prefix + "Q", defaultQ, 0.1f, 18.0f));
 	}
 
-	pGlobalGain = AddParameter(std::make_unique<SliderParameter>("Output", 0.0f, -24.0f, 24.0f));
-	pScale = AddParameter(std::make_unique<SliderParameter>("Scale", 100.0f, 0.0f, 200.0f));
+	pGlobalGain = AddParameter(std::make_unique<KnobParameter>("Output", 0.0f, -24.0f, 24.0f, ImGuiKnobVariant_Decibel));
+	pScale = AddParameter(std::make_unique<KnobParameter>("Scale", 100.0f, 0.0f, 200.0f, ImGuiKnobVariant_Percent));
 	pAdaptQ = AddParameter(std::make_unique<SliderParameter>("AdaptQ", 0.0f, 0.0f, 1.0f));
 	pMode = AddParameter(std::make_unique<SliderParameter>("Mode", 0.0f, 0.0f, 4.0f));
 
@@ -317,19 +317,19 @@ bool EqProcessor::RenderCustomUI(const ImVec2& size) {
 		auto& band = mBands[mSelectedBandIndex];
 
 		ImGui::PushID("L_Freq");
-		DrawKnob("Freq", &band.pFreq->value, 10.0f, 22000.0f, ImGuiKnobVariant_Hertz);
+		band.pFreq->Draw();
 		ImGui::PopID();
 
 		ImGui::Dummy(ImVec2(0, 10));
 
 		ImGui::PushID("L_Gain");
-		DrawKnob("Gain", &band.pGain->value, -15.0f, 15.0f, ImGuiKnobVariant_Decibel);
+		band.pGain->Draw();
 		ImGui::PopID();
 
 		ImGui::Dummy(ImVec2(0, 10));
 
 		ImGui::PushID("L_Q");
-		DrawKnob("Q", &band.pQ->value, 0.1f, 18.0f);
+		band.pQ->Draw();
 		ImGui::PopID();
 
 	} else {
@@ -538,13 +538,13 @@ bool EqProcessor::RenderCustomUI(const ImVec2& size) {
 	ImGui::Dummy(ImVec2(0, 10));
 
 	ImGui::PushID("R_Scale");
-	DrawKnob("Scale", &pScale->value, 0.0f, 200.0f, ImGuiKnobVariant_Percent);
+	pScale->Draw();
 	ImGui::PopID();
 
 	ImGui::Dummy(ImVec2(0, 10));
 
 	ImGui::PushID("R_Gain");
-	DrawKnob("Gain", &pGlobalGain->value, -24.0f, 24.0f, ImGuiKnobVariant_Decibel);
+	pGlobalGain->Draw();
 	ImGui::PopID();
 
 	ImGui::EndGroup();

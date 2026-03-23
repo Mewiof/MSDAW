@@ -2,6 +2,7 @@
 #include "Parameter.h"
 
 Parameter* Parameter::sAutomationRequestParameter = nullptr;
+Parameter* Parameter::sSelectedParameter = nullptr;
 
 bool Parameter::HandleCommonInteractions() {
 	bool changed = false;

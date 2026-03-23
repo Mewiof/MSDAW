@@ -1,6 +1,6 @@
 #pragma once
 
-#include "imgui.h"
+#include "Parameter.h"
 
 enum ImGuiKnobVariant {
 	ImGuiKnobVariant_Linear,		// 0 to 100, -10 to +10, etc.
@@ -10,7 +10,12 @@ enum ImGuiKnobVariant {
 	ImGuiKnobVariant_DecibelBipolar // linear, formatted as dB, fills from center
 };
 
-float LinearToLog(float t, float min, float max);
-float LogToLinear(float value, float min, float max);
-void FormatKnobValue(char* buffer, size_t bufferSize, float value, ImGuiKnobVariant variant);
-bool DrawKnob(const char* label, float* value, float min, float max, ImGuiKnobVariant variant = ImGuiKnobVariant_Linear);
+class KnobParameter : public Parameter {
+public:
+	ImGuiKnobVariant variant;
+
+	KnobParameter(const std::string& name, float value, float minValue, float maxValue, ImGuiKnobVariant variant = ImGuiKnobVariant_Linear)
+		: Parameter(name, value, minValue, maxValue), variant(variant) {}
+
+	bool Draw() override;
+};

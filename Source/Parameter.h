@@ -22,6 +22,10 @@ public:
 	void ResetToDefault() { value = defaultValue; }
 
 	static Parameter* GetAndClearAutomationRequestParameter();
+
+	bool IsSelected() const { return sSelectedParameter == this; }
+	void Select() { sSelectedParameter = this; }
 protected:
 	static Parameter* sAutomationRequestParameter;
+	static Parameter* sSelectedParameter;
 };
