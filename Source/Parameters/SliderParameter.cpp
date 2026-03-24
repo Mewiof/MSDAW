@@ -1,92 +1,18 @@
 #include "PrecompHeader.h"
 #include "SliderParameter.h"
-#include <algorithm>
-#include <cstdlib>
-#include <cstdio>
 
 bool SliderParameter::Draw() {
 	bool changed = false;
 	ImGui::PushID(this);
 	ImGui::Text("%s", name.c_str());
 
-	ImGui::SetNextItemWidth(-1);
-
-	// typing interception
-	static ImGuiID s_TypingSliderID = 0;
-	static char s_TextBuffer[64] = "";
-	static bool s_FocusNextFrame = false;
+	ImGui::SetNextItemWidth(-1.0f);
 
 	ImGuiID currentID = ImGui::GetID("##SliderBtn");
+	CheckTypingStart(currentID);
 
-	// intercept
-	if (IsSelected() && s_TypingSliderID == 0) {
-		bool startTyping = false;
-		char initialChar = '\0';
-
-		if (!ImGui::GetIO().WantTextInput) {
-			for (int k = ImGuiKey_0; k <= ImGuiKey_9; k++) {
-				if (ImGui::IsKeyPressed((ImGuiKey)k)) {
-					startTyping = true;
-					initialChar = '0' + (k - ImGuiKey_0);
-					break;
-				}
-			}
-			if (!startTyping) {
-				for (int k = ImGuiKey_Keypad0; k <= ImGuiKey_Keypad9; k++) {
-					if (ImGui::IsKeyPressed((ImGuiKey)k)) {
-						startTyping = true;
-						initialChar = '0' + (k - ImGuiKey_Keypad0);
-						break;
-					}
-				}
-			}
-			if (!startTyping && (ImGui::IsKeyPressed(ImGuiKey_Minus) || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract))) {
-				startTyping = true;
-				initialChar = '-';
-			}
-			if (!startTyping && (ImGui::IsKeyPressed(ImGuiKey_Period) || ImGui::IsKeyPressed(ImGuiKey_KeypadDecimal))) {
-				startTyping = true;
-				initialChar = '.';
-			}
-		}
-
-		if (startTyping) {
-			s_TypingSliderID = currentID;
-			s_TextBuffer[0] = initialChar;
-			s_TextBuffer[1] = '\0';
-			s_FocusNextFrame = true;
-		}
-	}
-
-	if (s_TypingSliderID == currentID) {
-		ImGui::PushItemWidth(-1);
-
-		if (s_FocusNextFrame) {
-			ImGui::SetKeyboardFocusHere();
-			s_FocusNextFrame = false;
-		}
-
-		bool enterPressed = ImGui::InputText("##TypeInput", s_TextBuffer, sizeof(s_TextBuffer), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-
-		float minV = std::min(minValue, maxValue);
-		float maxV = std::max(minValue, maxValue);
-
-		if (enterPressed) {
-			value = std::clamp((float)atof(s_TextBuffer), minV, maxV);
-			changed = true;
-			s_TypingSliderID = 0;
-		} else if (ImGui::IsItemDeactivated()) {
-			if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-				s_TypingSliderID = 0;
-			} else {
-				value = std::clamp((float)atof(s_TextBuffer), minV, maxV);
-				changed = true;
-				s_TypingSliderID = 0;
-			}
-		}
-
-		ImGui::PopItemWidth();
-		changed |= HandleCommonInteractions();
+	if (IsTyping(currentID)) {
+		changed |= DrawTypingInput(currentID, -1.0f);
 	} else {
 		ImVec2 pos = ImGui::GetCursorScreenPos();
 		ImVec2 size(ImGui::CalcItemWidth(), ImGui::GetFrameHeight());
@@ -94,15 +20,17 @@ bool SliderParameter::Draw() {
 			size.x = ImGui::GetContentRegionAvail().x;
 
 		ImGui::InvisibleButton("##SliderBtn", size);
-		bool hovered = ImGui::IsItemHovered();
-		bool active = ImGui::IsItemActive();
+
+		bool isActive = ImGui::IsItemActive();
+		bool isHovered = ImGui::IsItemHovered() && !ImGui::IsAnyItemActive();
 
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemClicked(ImGuiMouseButton_Right))
 			Select();
 
-		if (active) {
+		if (isActive) {
 			ImGui::SetMouseCursor(ImGuiMouseCursor_None);
-			float deltaY = ImGui::GetIO().MouseDelta.y;
+
+			float deltaY = GetSafeMouseDeltaY();
 			if (deltaY != 0.0f) {
 				float range = maxValue - minValue;
 				float sensitivity = range / 200.0f;
@@ -114,16 +42,16 @@ bool SliderParameter::Draw() {
 				value = std::clamp(value - (deltaY * sensitivity), minV, maxV);
 				changed = true;
 			}
+			HandleInfiniteDrag();
 		}
 
 		if (ImGui::IsItemDeactivated()) {
-			ImGui::GetIO().WantSetMousePos = true;
-			ImGui::GetIO().MousePos = ImGui::GetIO().MouseClickedPos[0];
+			RestoreMousePosition();
 		}
 
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
-		ImU32 bgColor = ImGui::GetColorU32(hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
-		ImU32 fillColor = ImGui::GetColorU32(active ? ImGuiCol_SliderGrabActive : ImGuiCol_SliderGrab);
+		ImU32 bgColor = ImGui::GetColorU32(isHovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
+		ImU32 fillColor = ImGui::GetColorU32(isActive ? ImGuiCol_SliderGrabActive : ImGuiCol_SliderGrab);
 
 		drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), bgColor, ImGui::GetStyle().FrameRounding);
 

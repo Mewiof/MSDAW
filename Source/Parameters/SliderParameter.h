@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Parameter.h"
+#include "ContinuousParameter.h"
 
-class SliderParameter : public Parameter {
+class SliderParameter : public ContinuousParameter {
 public:
 	SliderParameter(const std::string& name, float value, float minValue, float maxValue)
-		: Parameter(name, value, minValue, maxValue) {}
+		: ContinuousParameter(name, value, minValue, maxValue) {}
 
 	bool Draw() override;
 };

@@ -1,9 +1,5 @@
 #include "PrecompHeader.h"
 #include "KnobParameter.h"
-#include <algorithm>
-#include <cstdlib>
-#include <cstdio>
-#include <cmath>
 
 namespace {
 	float LinearToLog(float t, float min, float max) {
@@ -48,51 +44,8 @@ bool KnobParameter::Draw() {
 	bool changed = false;
 	ImGui::PushID(this);
 
-	// typing interception
-	static ImGuiID s_TypingKnobID = 0;
-	static char s_TextBuffer[64] = "";
-	static bool s_FocusNextFrame = false;
-
 	ImGuiID currentID = ImGui::GetID("##KnobBtn");
-
-	if (IsSelected() && s_TypingKnobID == 0) {
-		bool startTyping = false;
-		char initialChar = '\0';
-
-		if (!ImGui::GetIO().WantTextInput) {
-			for (int k = ImGuiKey_0; k <= ImGuiKey_9; k++) {
-				if (ImGui::IsKeyPressed((ImGuiKey)k)) {
-					startTyping = true;
-					initialChar = '0' + (k - ImGuiKey_0);
-					break;
-				}
-			}
-			if (!startTyping) {
-				for (int k = ImGuiKey_Keypad0; k <= ImGuiKey_Keypad9; k++) {
-					if (ImGui::IsKeyPressed((ImGuiKey)k)) {
-						startTyping = true;
-						initialChar = '0' + (k - ImGuiKey_Keypad0);
-						break;
-					}
-				}
-			}
-			if (!startTyping && (ImGui::IsKeyPressed(ImGuiKey_Minus) || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract))) {
-				startTyping = true;
-				initialChar = '-';
-			}
-			if (!startTyping && (ImGui::IsKeyPressed(ImGuiKey_Period) || ImGui::IsKeyPressed(ImGuiKey_KeypadDecimal))) {
-				startTyping = true;
-				initialChar = '.';
-			}
-		}
-
-		if (startTyping) {
-			s_TypingKnobID = currentID;
-			s_TextBuffer[0] = initialChar;
-			s_TextBuffer[1] = '\0';
-			s_FocusNextFrame = true;
-		}
-	}
+	CheckTypingStart(currentID);
 
 	ImGuiStyle& style = ImGui::GetStyle();
 	const float radius = 18.0f;
@@ -104,60 +57,26 @@ bool KnobParameter::Draw() {
 	ImVec2 labelSize = ImGui::CalcTextSize(name.c_str());
 	ImVec2 valSize = ImGui::CalcTextSize(valBuffer);
 
-	// whichever is wider: knob radius, name label, or value label
 	float totalWidth = std::max({radius * 2.0f, labelSize.x, valSize.x});
 	float totalHeight = (lineHeight * 2) + (style.ItemInnerSpacing.y * 2) + (radius * 2);
 
-	if (s_TypingKnobID == currentID) {
-		// typed input inline
-		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (totalHeight - lineHeight) * 0.5f);
-		ImGui::PushItemWidth(totalWidth);
-
-		if (s_FocusNextFrame) {
-			ImGui::SetKeyboardFocusHere();
-			s_FocusNextFrame = false;
-		}
-
-		bool enterPressed = ImGui::InputText("##TypeInput", s_TextBuffer, sizeof(s_TextBuffer), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-
-		float minV = std::min(minValue, maxValue);
-		float maxV = std::max(minValue, maxValue);
-
-		if (enterPressed) {
-			value = std::clamp((float)atof(s_TextBuffer), minV, maxV);
-			changed = true;
-			s_TypingKnobID = 0;
-		} else if (ImGui::IsItemDeactivated()) {
-			if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-				s_TypingKnobID = 0;
-			} else {
-				value = std::clamp((float)atof(s_TextBuffer), minV, maxV);
-				changed = true;
-				s_TypingKnobID = 0;
-			}
-		}
-
-		ImGui::PopItemWidth();
-		changed |= HandleCommonInteractions();
-		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (totalHeight - lineHeight) * 0.5f); // balance
+	if (IsTyping(currentID)) {
+		changed |= DrawTypingInput(currentID, totalWidth, (totalHeight - lineHeight) * 0.5f);
 	} else {
-		// knob render data
 		ImVec2 pos = ImGui::GetCursorScreenPos();
-
 		ImGui::InvisibleButton("##KnobBtn", ImVec2(totalWidth, totalHeight));
-		bool isActive = ImGui::IsItemActive();
-		bool isHovered = ImGui::IsItemHovered();
 
-		// selection
+		bool isActive = ImGui::IsItemActive();
+		bool isHovered = ImGui::IsItemHovered() && !ImGui::IsAnyItemActive();
+
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
 			Select();
 		}
 
-		// drag
 		if (isActive) {
 			ImGui::SetMouseCursor(ImGuiMouseCursor_None);
 
-			float deltaY = ImGui::GetIO().MouseDelta.y;
+			float deltaY = GetSafeMouseDeltaY();
 			if (deltaY != 0.0f) {
 				float mouseSensitivity = 0.005f;
 				if (ImGui::GetIO().KeyShift)
@@ -170,11 +89,11 @@ bool KnobParameter::Draw() {
 				value = (variant == ImGuiKnobVariant_Hertz) ? LinearToLog(t, minValue, maxValue) : (minValue + t * (maxValue - minValue));
 				changed = true;
 			}
+			HandleInfiniteDrag();
 		}
 
 		if (ImGui::IsItemDeactivated()) {
-			ImGui::GetIO().WantSetMousePos = true;
-			ImGui::GetIO().MousePos = ImGui::GetIO().MouseClickedPos[0];
+			RestoreMousePosition();
 		}
 
 		// visuals
@@ -182,7 +101,6 @@ bool KnobParameter::Draw() {
 		const float ANGLE_MIN = 3.14159265359f * 0.675f;
 		const float ANGLE_MAX = 3.14159265359f * 2.325f;
 
-		// re-calculate center
 		float knobCenterY = pos.y + lineHeight + style.ItemInnerSpacing.y + radius;
 		ImVec2 center = ImVec2(pos.x + totalWidth * 0.5f, knobCenterY);
 
@@ -201,15 +119,12 @@ bool KnobParameter::Draw() {
 		}
 		ImU32 colArc = ImGui::ColorConvertFloat4ToU32(arcColorVec);
 
-		// global selection outline
 		if (IsSelected())
 			drawList->AddRect(pos, ImVec2(pos.x + totalWidth, pos.y + totalHeight), IM_COL32(255, 255, 255, 255), ImGui::GetStyle().FrameRounding);
 
-		// background
 		drawList->PathArcTo(center, radius * 0.85f, ANGLE_MIN, ANGLE_MAX, 32);
 		drawList->PathStroke(colBackgroud, 0, 3.0f);
 
-		// active arc
 		if (variant == ImGuiKnobVariant_DecibelBipolar) {
 			float tZero = (0.0f - minValue) / (maxValue - minValue);
 			float angleZero = ANGLE_MIN + (ANGLE_MAX - ANGLE_MIN) * tZero;
@@ -225,7 +140,6 @@ bool KnobParameter::Draw() {
 			drawList->PathStroke(colArc, 0, 3.0f);
 		}
 
-		// tick indicaator
 		ImVec2 tickVector = ImVec2(cosf(angle), sinf(angle));
 		float arcRadius = radius * 0.85f;
 		float tickLen = arcRadius + 1.5f;
@@ -234,7 +148,6 @@ bool KnobParameter::Draw() {
 			ImVec2(center.x + tickVector.x * tickLen, center.y + tickVector.y * tickLen),
 			colBackgroud, 3.0f);
 
-		// labels
 		ImVec2 labelPos = ImVec2(pos.x + (totalWidth - labelSize.x) * 0.5f, pos.y);
 		drawList->AddText(labelPos, colText, name.c_str());
 
@@ -242,7 +155,6 @@ bool KnobParameter::Draw() {
 		ImU32 valTextCol = (isActive || isHovered) ? colArc : colText;
 		drawList->AddText(valPos, valTextCol, valBuffer);
 
-		// handle natively
 		changed |= HandleCommonInteractions();
 	}
 

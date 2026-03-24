@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Parameter.h"
+#include "ContinuousParameter.h"
 
 enum ImGuiKnobVariant {
 	ImGuiKnobVariant_Linear,		// 0 to 100, -10 to +10, etc.
@@ -10,12 +10,12 @@ enum ImGuiKnobVariant {
 	ImGuiKnobVariant_DecibelBipolar // linear, formatted as dB, fills from center
 };
 
-class KnobParameter : public Parameter {
+class KnobParameter : public ContinuousParameter {
 public:
 	ImGuiKnobVariant variant;
 
 	KnobParameter(const std::string& name, float value, float minValue, float maxValue, ImGuiKnobVariant variant = ImGuiKnobVariant_Linear)
-		: Parameter(name, value, minValue, maxValue), variant(variant) {}
+		: ContinuousParameter(name, value, minValue, maxValue), variant(variant) {}
 
 	bool Draw() override;
 };
