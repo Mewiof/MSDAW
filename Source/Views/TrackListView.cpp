@@ -32,7 +32,7 @@ void TrackListView::Render(const ImVec2& pos, float width, float height) {
 		ImGui::BeginChild("TrackListContent", ImVec2(0, listHeight), false, ImGuiWindowFlags_None);
 
 		auto& tracks = project->GetTracks();
-		ImGui::SetCursorPosY(-mContext.state.scrollY);
+		ImGui::SetCursorPosY(-mContext.state.timelineScrollY);
 
 		// handle deletion logic after loop
 		int trackToProcess = -1;

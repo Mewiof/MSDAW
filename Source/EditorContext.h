@@ -37,7 +37,9 @@ struct EditorState {
 	float mainScale = 1.0f;
 	float pixelsPerBeat = 60.0f;
 	double timelineGrid = 1.0;
-	float scrollY = 0.0f; // master timeline scroll y
+	float timelineScrollY = 0.0f; // master timeline scroll y
+	float timelineScrollX = 0.0f; // master timeline scroll x
+	bool restoreScroll = false;
 
 	// timeline selection (beats)
 	double selectionStart = 0.0;

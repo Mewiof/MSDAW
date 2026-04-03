@@ -48,7 +48,10 @@ void TimelineView::Render(const ImVec2& pos, float width, float height) {
 		mContext.state.followPlayback = false;
 	}
 
-	mContext.state.scrollY = ImGui::GetScrollY();
+	if (!mContext.state.restoreScroll) {
+		mContext.state.timelineScrollX = ImGui::GetScrollX();
+		mContext.state.timelineScrollY = ImGui::GetScrollY();
+	}
 
 	if (project) {
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -385,6 +388,12 @@ void TimelineView::Render(const ImVec2& pos, float width, float height) {
 
 		ImGui::SetCursorScreenPos(ImVec2(winPos.x, trackAreaStartY + tracks.size() * rowFullHeight));
 		ImGui::Dummy(ImVec2(contentWidth + 500.0f, 20.0f));
+
+		if (mContext.state.restoreScroll) {
+			ImGui::SetScrollX(mContext.state.timelineScrollX);
+			ImGui::SetScrollY(mContext.state.timelineScrollY);
+			mContext.state.restoreScroll = false;
+		}
 	}
 	ImGui::End();
 }

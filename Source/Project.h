@@ -7,6 +7,14 @@
 #include "Track.h"
 #include "Transport.h"
 
+struct ProjectViewState {
+	float pixelsPerBeat = 60.0f;
+	double selectionStart = 0.0;
+	double selectionEnd = 0.0;
+	float scrollX = 0.0f;
+	float scrollY = 0.0f;
+};
+
 class Project {
 public:
 	Project();
@@ -47,9 +55,14 @@ public:
 	// serialization
 	void Save(const std::string& path);
 	void Load(const std::string& path);
+
+	// view state
+	ProjectViewState& GetViewState() { return mViewState; }
+	void SetViewState(const ProjectViewState& state) { mViewState = state; }
 private:
 	Transport mTransport;
 	std::vector<std::shared_ptr<Track>> mTracks;
+	ProjectViewState mViewState;
 	std::shared_ptr<Track> mMasterTrack;
 
 	std::vector<float> mMixBuffer;

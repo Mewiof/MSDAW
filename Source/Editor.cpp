@@ -68,6 +68,10 @@ void Editor::NewProject() {
 		mCurrentProjectPath.clear();
 		mContext.state.selectionStart = 0.0;
 		mContext.state.selectionEnd = 0.0;
+		mContext.state.pixelsPerBeat = 60.0f;
+		mContext.state.timelineScrollX = 0.0f;
+		mContext.state.timelineScrollY = 0.0f;
+		mContext.state.restoreScroll = true;
 	}
 }
 
@@ -76,6 +80,13 @@ void Editor::SaveProject() {
 		SaveProjectAs();
 	} else {
 		if (Project* p = GetProject()) {
+			ProjectViewState vs;
+			vs.pixelsPerBeat = mContext.state.pixelsPerBeat;
+			vs.selectionStart = mContext.state.selectionStart;
+			vs.selectionEnd = mContext.state.selectionEnd;
+			vs.scrollX = mContext.state.timelineScrollX;
+			vs.scrollY = mContext.state.timelineScrollY;
+			p->SetViewState(vs);
 			p->Save(mCurrentProjectPath);
 		}
 	}
@@ -102,6 +113,13 @@ void Editor::SaveProjectAs() {
 	if (GetSaveFileNameA(&ofn) == TRUE) {
 		mCurrentProjectPath = szFile;
 		if (Project* p = GetProject()) {
+			ProjectViewState vs;
+			vs.pixelsPerBeat = mContext.state.pixelsPerBeat;
+			vs.selectionStart = mContext.state.selectionStart;
+			vs.selectionEnd = mContext.state.selectionEnd;
+			vs.scrollX = mContext.state.timelineScrollX;
+			vs.scrollY = mContext.state.timelineScrollY;
+			p->SetViewState(vs);
 			p->Save(mCurrentProjectPath);
 		}
 	}
@@ -129,6 +147,14 @@ void Editor::OpenProject() {
 		mCurrentProjectPath = szFile;
 		if (Project* p = GetProject()) {
 			p->Load(mCurrentProjectPath);
+
+			const auto& vs = p->GetViewState();
+			mContext.state.pixelsPerBeat = std::max(10.0f, vs.pixelsPerBeat);
+			mContext.state.selectionStart = vs.selectionStart;
+			mContext.state.selectionEnd = vs.selectionEnd;
+			mContext.state.timelineScrollX = vs.scrollX;
+			mContext.state.timelineScrollY = vs.scrollY;
+			mContext.state.restoreScroll = true;
 		}
 	}
 #endif

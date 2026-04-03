@@ -599,6 +599,19 @@ void Project::Save(const std::string& path) {
 	out << "VERSION " << kCurrentProjectVersion << "\n";
 	out << "BPM " << mTransport.GetBpm() << "\n";
 
+	double sR = mTransport.GetSampleRate() > 0 ? mTransport.GetSampleRate() : 48000.0;
+	double beatsPerSec = mTransport.GetBpm() / 60.0;
+
+	out << "PLAYHEAD_BEAT " << ((double)mTransport.GetPosition() / sR * beatsPerSec) << "\n";
+	out << "LOOP_EN " << (mTransport.IsLoopEnabled() ? 1 : 0) << "\n";
+	out << "LOOP_START_BEAT " << ((double)mTransport.GetLoopStart() / sR * beatsPerSec) << "\n";
+	out << "LOOP_END_BEAT " << ((double)mTransport.GetLoopEnd() / sR * beatsPerSec) << "\n";
+	out << "VIEW_PPB " << mViewState.pixelsPerBeat << "\n";
+	out << "VIEW_SEL_START " << mViewState.selectionStart << "\n";
+	out << "VIEW_SEL_END " << mViewState.selectionEnd << "\n";
+	out << "VIEW_SCROLL_X " << mViewState.scrollX << "\n";
+	out << "VIEW_SCROLL_Y " << mViewState.scrollY << "\n";
+
 	for (int i = 0; i < (int)mTracks.size(); ++i) {
 		mTracks[i]->Save(out, i);
 		if (auto p = mTracks[i]->GetParent()) {
@@ -635,6 +648,13 @@ void Project::Load(const std::string& path) {
 	std::string line;
 	int version = 0;
 
+	double loadedPlayheadBeat = 0.0;
+	double loadedLoopStartBeat = 0.0;
+	double loadedLoopEndBeat = 4.0;
+	bool loadedLoopEn = false;
+
+	mViewState = ProjectViewState(); // reset to default
+
 	while (std::getline(in, line)) {
 		if (line == "PROJECT_END")
 			break;
@@ -649,6 +669,26 @@ void Project::Load(const std::string& path) {
 			double bpm;
 			ss >> bpm;
 			mTransport.SetBpm(bpm);
+		} else if (token == "PLAYHEAD_BEAT") {
+			ss >> loadedPlayheadBeat;
+		} else if (token == "LOOP_EN") {
+			int val;
+			ss >> val;
+			loadedLoopEn = (val != 0);
+		} else if (token == "LOOP_START_BEAT") {
+			ss >> loadedLoopStartBeat;
+		} else if (token == "LOOP_END_BEAT") {
+			ss >> loadedLoopEndBeat;
+		} else if (token == "VIEW_PPB") {
+			ss >> mViewState.pixelsPerBeat;
+		} else if (token == "VIEW_SEL_START") {
+			ss >> mViewState.selectionStart;
+		} else if (token == "VIEW_SEL_END") {
+			ss >> mViewState.selectionEnd;
+		} else if (token == "VIEW_SCROLL_X") {
+			ss >> mViewState.scrollX;
+		} else if (token == "VIEW_SCROLL_Y") {
+			ss >> mViewState.scrollY;
 		} else if (token == "TRACK_BEGIN") {
 			auto t = std::make_shared<Track>();
 			t->Load(in);
@@ -679,4 +719,11 @@ void Project::Load(const std::string& path) {
 	}
 	if (mMasterTrack)
 		mMasterTrack->RebindAutomation();
+
+	double sR = mTransport.GetSampleRate() > 0 ? mTransport.GetSampleRate() : 48000.0;
+	double secsPerBeat = 60.0 / mTransport.GetBpm();
+
+	mTransport.SetPosition((int64_t)(loadedPlayheadBeat * secsPerBeat * sR));
+	mTransport.SetLoopRange((int64_t)(loadedLoopStartBeat * secsPerBeat * sR), (int64_t)(loadedLoopEndBeat * secsPerBeat * sR));
+	mTransport.SetLoopEnabled(loadedLoopEn);
 }
