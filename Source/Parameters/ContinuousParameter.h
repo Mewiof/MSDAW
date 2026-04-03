@@ -22,4 +22,5 @@ private:
 	static ImGuiID s_TypingID;
 	static char s_TextBuffer[64];
 	static bool s_FocusNextFrame;
+	static bool s_MoveCursorToEnd;
 };

@@ -4,6 +4,7 @@
 ImGuiID ContinuousParameter::s_TypingID = 0;
 char ContinuousParameter::s_TextBuffer[64] = "";
 bool ContinuousParameter::s_FocusNextFrame = false;
+bool ContinuousParameter::s_MoveCursorToEnd = false;
 
 void ContinuousParameter::CheckTypingStart(ImGuiID currentID) {
 	if (IsSelected() && s_TypingID == 0) {
@@ -42,6 +43,7 @@ void ContinuousParameter::CheckTypingStart(ImGuiID currentID) {
 			s_TextBuffer[0] = initialChar;
 			s_TextBuffer[1] = '\0';
 			s_FocusNextFrame = true;
+			s_MoveCursorToEnd = true;
 		}
 	}
 }
@@ -66,7 +68,19 @@ bool ContinuousParameter::DrawTypingInput(ImGuiID currentID, float width, float 
 		s_FocusNextFrame = false;
 	}
 
-	bool enterPressed = ImGui::InputText("##TypeInput", s_TextBuffer, sizeof(s_TextBuffer), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+	auto moveCursorToEndCallback = [](ImGuiInputTextCallbackData* data) -> int {
+		if (s_MoveCursorToEnd) {
+			data->CursorPos = data->BufTextLen;
+			data->SelectionStart = data->CursorPos;
+			data->SelectionEnd = data->CursorPos;
+			s_MoveCursorToEnd = false;
+		}
+		return 0;
+	};
+
+	bool enterPressed = ImGui::InputText("##TypeInput", s_TextBuffer, sizeof(s_TextBuffer),
+										 ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways,
+										 moveCursorToEndCallback);
 
 	float minV = std::min(minValue, maxValue);
 	float maxV = std::max(minValue, maxValue);
@@ -76,6 +90,7 @@ bool ContinuousParameter::DrawTypingInput(ImGuiID currentID, float width, float 
 		changed = true;
 		s_TypingID = 0;
 	} else if (ImGui::IsItemDeactivated()) {
+		s_MoveCursorToEnd = false;
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 			s_TypingID = 0;
 		} else {
