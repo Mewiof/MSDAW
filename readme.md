@@ -24,7 +24,7 @@ The project uses **CMake** & configured for Clang/Windows
 
 Install [LLVM](https://github.com/llvm/llvm-project/releases) & [CMake](https://cmake.org/download/) (+ [Ninja](https://ninja-build.org/) optionally)
 
-1. Clone with submodules: `git clone --recursive https://github.com/mewiof/MSDAW.git`
+1. Clone with submodules: `git clone --recurse-submodules https://github.com/mewiof/MSDAW.git`
 2. Open in Visual Studio/VSCode or use CMake:
     ```bash
     mkdir build
