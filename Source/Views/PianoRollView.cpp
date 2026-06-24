@@ -53,12 +53,39 @@ void PianoRollView::Render() {
 		Transport* transport = project ? &project->GetTransport() : nullptr;
 
 		ImGui::Text("Editing Clip: %s", mIDIClip->GetName().c_str());
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(100 * mContext.state.mainScale);
-		ImGui::InputFloat("Snap", &mPrSnapGrid, 0.0f, 0.0f, "%.2f");
-		if (mPrSnapGrid < 0.01f)
-			mPrSnapGrid = 0.01f;
 
+		ImGui::SameLine();
+		ImGui::Dummy(ImVec2(10, 0));
+		ImGui::SameLine();
+		ImGui::Text("Grid");
+		ImGui::SameLine();
+
+		int clipNum = mIDIClip->GetGridNumerator();
+		int clipDen = mIDIClip->GetGridDenominator();
+		bool gridChanged = false;
+
+		ImGui::SetNextItemWidth(30 * mContext.state.mainScale);
+		if (ImGui::DragInt("##PRGridNum", &clipNum, 0.2f, 1, 64))
+			gridChanged = true;
+		ImGui::SameLine();
+		ImGui::Text("/");
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(30 * mContext.state.mainScale);
+		if (ImGui::DragInt("##PRGridDen", &clipDen, 0.2f, 1, 128))
+			gridChanged = true;
+
+		if (gridChanged) {
+			if (clipNum < 1)
+				clipNum = 1;
+			if (clipDen < 1)
+				clipDen = 1;
+			mIDIClip->SetGrid(clipNum, clipDen);
+		}
+
+		double snapGrid = (double)clipNum / (double)clipDen;
+
+		ImGui::SameLine();
+		ImGui::Dummy(ImVec2(10, 0));
 		ImGui::SameLine();
 		ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(Ctrl+A: Select All | Del: Remove)");
 
@@ -213,10 +240,10 @@ void PianoRollView::Render() {
 						MIDINote newNote;
 						newNote.noteNumber = std::clamp(mouseNoteNum, 0, 127);
 						// snap calculation
-						newNote.startBeat = std::round(mouseBeat / mPrSnapGrid) * mPrSnapGrid;
+						newNote.startBeat = std::round(mouseBeat / snapGrid) * snapGrid;
 						if (newNote.startBeat < 0)
 							newNote.startBeat = 0;
-						newNote.durationBeats = mPrSnapGrid;
+						newNote.durationBeats = snapGrid;
 						newNote.velocity = 100;
 						notes.push_back(newNote);
 						mSelectedIndices.push_back((int)notes.size() - 1);
@@ -272,8 +299,8 @@ void PianoRollView::Render() {
 					auto& state = pair.second;
 
 					double newStart = state.originalStart + deltaBeats;
-					if (mPrSnapGrid > 0)
-						newStart = std::round(newStart / mPrSnapGrid) * mPrSnapGrid;
+					if (snapGrid > 0)
+						newStart = std::round(newStart / snapGrid) * snapGrid;
 					if (newStart < 0)
 						newStart = 0;
 
@@ -293,10 +320,10 @@ void PianoRollView::Render() {
 					auto& state = pair.second;
 
 					double newDur = state.originalDuration + deltaBeats;
-					if (mPrSnapGrid > 0)
-						newDur = std::round(newDur / mPrSnapGrid) * mPrSnapGrid;
-					if (newDur < mPrSnapGrid)
-						newDur = mPrSnapGrid;
+					if (snapGrid > 0)
+						newDur = std::round(newDur / snapGrid) * snapGrid;
+					if (newDur < snapGrid)
+						newDur = snapGrid;
 
 					note.durationBeats = newDur;
 				}
@@ -345,10 +372,28 @@ void PianoRollView::Render() {
 		}
 
 		// b. vertical grid lines (beats)
-		int totalBeats = (int)(contentWidth / PIXELS_PER_BEAT_PR);
-		for (int b = 0; b <= totalBeats; ++b) {
-			float x = canvasPos.x + KEY_WIDTH + (b * PIXELS_PER_BEAT_PR);
-			drawList->AddLine(ImVec2(x, canvasPos.y), ImVec2(x, canvasPos.y + contentHeight), IM_COL32(100, 100, 100, 80));
+		double maxBeats = contentWidth / PIXELS_PER_BEAT_PR;
+
+		// draw bars and beats
+		int maxBeatsInt = (int)ceil(maxBeats);
+		for (int b = 0; b <= maxBeatsInt; ++b) {
+			float x = canvasPos.x + KEY_WIDTH + (float)(b * PIXELS_PER_BEAT_PR);
+			bool isBar = (b % 4 == 0);
+			ImU32 col = isBar ? IM_COL32(150, 150, 150, 100) : IM_COL32(120, 120, 120, 80);
+			drawList->AddLine(ImVec2(x, canvasPos.y), ImVec2(x, canvasPos.y + contentHeight), col);
+		}
+
+		// draw subdivisions
+		if (snapGrid * PIXELS_PER_BEAT_PR >= 10.0f && snapGrid < 1.0) {
+			int endIdx = (int)ceil(maxBeats / snapGrid);
+			for (int i = 0; i <= endIdx; ++i) {
+				double b = i * snapGrid;
+				// avoid overdrawing beats/bars
+				if (std::abs(fmod(b + 0.001, 1.0)) > 0.002) {
+					float x = canvasPos.x + KEY_WIDTH + (float)(b * PIXELS_PER_BEAT_PR);
+					drawList->AddLine(ImVec2(x, canvasPos.y), ImVec2(x, canvasPos.y + contentHeight), IM_COL32(100, 100, 100, 40));
+				}
+			}
 		}
 
 		// c. notes

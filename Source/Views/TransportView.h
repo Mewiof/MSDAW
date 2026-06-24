@@ -9,6 +9,4 @@ public:
 	void Render(const ImVec2& pos, float width, float height);
 private:
 	EditorContext& mContext;
-	int mGridNumerator = 1;
-	int mGridDenominator = 4;
 };

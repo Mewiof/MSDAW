@@ -527,6 +527,7 @@ void Track::Save(std::ostream& out, int trackIndex) {
 		else if (std::dynamic_pointer_cast<MIDIClip>(clip))
 			type = "MIDI";
 
+		out << "CLIP_GRID_NEXT " << clip->GetGridNumerator() << " " << clip->GetGridDenominator() << "\n";
 		out << "CLIP_BEGIN " << type << "\n";
 		clip->Save(out);
 		out << "CLIP_END\n";
@@ -546,6 +547,8 @@ void Track::Save(std::ostream& out, int trackIndex) {
 }
 
 void Track::Load(std::istream& in) {
+	int pendingGridNum = 1;
+	int pendingGridDen = 4;
 
 	std::string line;
 	while (std::getline(in, line)) {
@@ -600,6 +603,8 @@ void Track::Load(std::istream& in) {
 				if (std::getline(in, endTag)) {
 				}
 			}
+		} else if (token == "CLIP_GRID_NEXT") {
+			ss >> pendingGridNum >> pendingGridDen;
 		} else if (token == "CLIP_BEGIN") {
 			std::string type;
 			ss >> type;
@@ -612,6 +617,7 @@ void Track::Load(std::istream& in) {
 			}
 
 			if (clip) {
+				clip->SetGrid(pendingGridNum, pendingGridDen);
 				clip->Load(in);
 				AddClip(clip);
 			} else {
@@ -621,6 +627,8 @@ void Track::Load(std::istream& in) {
 						break;
 				}
 			}
+			pendingGridNum = 1;
+			pendingGridDen = 4;
 		} else if (token == "AUTO_BEGIN") {
 			size_t q1 = line.find('"');
 			size_t q2 = line.find('"', q1 + 1);

@@ -73,6 +73,10 @@ void Editor::NewProject() {
 		mContext.state.timelineScrollX = 0.0f;
 		mContext.state.timelineScrollY = 0.0f;
 		mContext.state.restoreScroll = true;
+
+		mContext.state.timelineGridNumerator = 1;
+		mContext.state.timelineGridDenominator = 4;
+		mContext.state.timelineGrid = 0.25;
 	}
 }
 
@@ -87,6 +91,8 @@ void Editor::SaveProject() {
 			vs.selectionEnd = mContext.state.selectionEnd;
 			vs.scrollX = mContext.state.timelineScrollX;
 			vs.scrollY = mContext.state.timelineScrollY;
+			vs.timelineGridNumerator = mContext.state.timelineGridNumerator;
+			vs.timelineGridDenominator = mContext.state.timelineGridDenominator;
 			p->SetViewState(vs);
 			p->Save(mCurrentProjectPath);
 		}
@@ -120,6 +126,8 @@ void Editor::SaveProjectAs() {
 			vs.selectionEnd = mContext.state.selectionEnd;
 			vs.scrollX = mContext.state.timelineScrollX;
 			vs.scrollY = mContext.state.timelineScrollY;
+			vs.timelineGridNumerator = mContext.state.timelineGridNumerator;
+			vs.timelineGridDenominator = mContext.state.timelineGridDenominator;
 			p->SetViewState(vs);
 			p->Save(mCurrentProjectPath);
 		}
@@ -155,6 +163,13 @@ void Editor::OpenProject() {
 			mContext.state.selectionEnd = vs.selectionEnd;
 			mContext.state.timelineScrollX = vs.scrollX;
 			mContext.state.timelineScrollY = vs.scrollY;
+
+			mContext.state.timelineGridNumerator = vs.timelineGridNumerator;
+			mContext.state.timelineGridDenominator = vs.timelineGridDenominator;
+			if (mContext.state.timelineGridDenominator <= 0)
+				mContext.state.timelineGridDenominator = 4;
+			mContext.state.timelineGrid = (double)mContext.state.timelineGridNumerator / mContext.state.timelineGridDenominator;
+
 			mContext.state.restoreScroll = true;
 		}
 	}

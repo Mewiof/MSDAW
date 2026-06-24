@@ -21,6 +21,14 @@ public:
 	void SetName(const std::string& name) { mName = name; }
 	const std::string& GetName() const { return mName; }
 
+	// per-clip grid snapping settings
+	void SetGrid(int num, int den) {
+		mGridNumerator = num;
+		mGridDenominator = den;
+	}
+	int GetGridNumerator() const { return mGridNumerator; }
+	int GetGridDenominator() const { return mGridDenominator; }
+
 	virtual void Save(std::ostream& out) {
 		out << "CLIP_NAME \"" << mName << "\"\n";
 		out << "START " << mStartBeat << "\n";
@@ -36,4 +44,7 @@ protected:
 	double mDuration = 4.0; // 1 bar
 	double mOffset = 0.0;	// content offset
 	std::string mName = "Clip";
+
+	int mGridNumerator = 1;
+	int mGridDenominator = 4;
 };

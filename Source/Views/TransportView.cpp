@@ -79,7 +79,7 @@ void TransportView::Render(const ImVec2& pos, float width, float height) {
 		// numerator
 		ImGui::SetNextItemWidth(30 * mContext.state.mainScale);
 		bool gridChanged = false;
-		if (ImGui::DragInt("##GridNum", &mGridNumerator, 0.2f, 1, 64))
+		if (ImGui::DragInt("##GridNum", &mContext.state.timelineGridNumerator, 0.2f, 1, 64))
 			gridChanged = true;
 
 		ImGui::SameLine();
@@ -88,16 +88,16 @@ void TransportView::Render(const ImVec2& pos, float width, float height) {
 
 		// denominator
 		ImGui::SetNextItemWidth(30 * mContext.state.mainScale);
-		if (ImGui::DragInt("##GridDen", &mGridDenominator, 0.2f, 1, 128))
+		if (ImGui::DragInt("##GridDen", &mContext.state.timelineGridDenominator, 0.2f, 1, 128))
 			gridChanged = true;
 
 		// update
 		if (gridChanged) {
-			if (mGridNumerator < 1)
-				mGridNumerator = 1;
-			if (mGridDenominator < 1)
-				mGridDenominator = 1;
-			mContext.state.timelineGrid = (double)mGridNumerator / (double)mGridDenominator;
+			if (mContext.state.timelineGridNumerator < 1)
+				mContext.state.timelineGridNumerator = 1;
+			if (mContext.state.timelineGridDenominator < 1)
+				mContext.state.timelineGridDenominator = 1;
+			mContext.state.timelineGrid = (double)mContext.state.timelineGridNumerator / (double)mContext.state.timelineGridDenominator;
 		}
 
 		// TODO: remove this

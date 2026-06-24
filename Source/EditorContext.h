@@ -36,7 +36,12 @@ enum class FollowMode {
 struct EditorState {
 	float mainScale = 1.0f;
 	float pixelsPerBeat = 60.0f;
-	double timelineGrid = 1.0;
+
+	// main timeline snapping settings
+	double timelineGrid = 0.25;
+	int timelineGridNumerator = 1;
+	int timelineGridDenominator = 4;
+
 	float timelineScrollY = 0.0f; // master timeline scroll y
 	float timelineScrollX = 0.0f; // master timeline scroll x
 	bool restoreScroll = false;

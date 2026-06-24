@@ -641,6 +641,8 @@ void Project::Save(const std::string& path) {
 	out << "VIEW_SEL_END " << mViewState.selectionEnd << "\n";
 	out << "VIEW_SCROLL_X " << mViewState.scrollX << "\n";
 	out << "VIEW_SCROLL_Y " << mViewState.scrollY << "\n";
+	out << "VIEW_GRID_NUM " << mViewState.timelineGridNumerator << "\n";
+	out << "VIEW_GRID_DEN " << mViewState.timelineGridDenominator << "\n";
 
 	for (int i = 0; i < (int)mTracks.size(); ++i) {
 		mTracks[i]->Save(out, i);
@@ -719,6 +721,10 @@ void Project::Load(const std::string& path) {
 			ss >> mViewState.scrollX;
 		} else if (token == "VIEW_SCROLL_Y") {
 			ss >> mViewState.scrollY;
+		} else if (token == "VIEW_GRID_NUM") {
+			ss >> mViewState.timelineGridNumerator;
+		} else if (token == "VIEW_GRID_DEN") {
+			ss >> mViewState.timelineGridDenominator;
 		} else if (token == "TRACK_BEGIN") {
 			auto t = std::make_shared<Track>();
 			t->Load(in);

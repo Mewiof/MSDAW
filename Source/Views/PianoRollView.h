@@ -44,9 +44,6 @@ private:
 	// audio preview state
 	int mLastPreviewNote = -1; // -1 means no note playing
 
-	// settings
-	float mPrSnapGrid = 0.25f;
-
 	// helpers
 	void ClearSelection() { mSelectedIndices.clear(); }
 	bool IsNoteSelected(int index);

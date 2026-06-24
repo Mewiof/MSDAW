@@ -13,6 +13,8 @@ struct ProjectViewState {
 	double selectionEnd = 0.0;
 	float scrollX = 0.0f;
 	float scrollY = 0.0f;
+	int timelineGridNumerator = 1;
+	int timelineGridDenominator = 4;
 };
 
 class Project {
