@@ -239,6 +239,62 @@ void Editor::OnExternalKey(int virtualKey, bool isDown) {
 }
 
 void Editor::HandleGlobalShortcuts() {
+#ifdef _WIN32
+	DWORD foregroundPid = 0;
+	HWND hWndFG = GetForegroundWindow();
+	if (hWndFG)
+		GetWindowThreadProcessId(hWndFG, &foregroundPid);
+
+	bool isOurProcessForeground = (foregroundPid == GetCurrentProcessId());
+	bool isMainWindowForeground = (hWndFG == (HWND)mContext.nativeWindowHandle);
+
+	if (isMainWindowForeground && ImGui::GetIO().WantTextInput)
+		return;
+
+	if (!isOurProcessForeground)
+		return;
+
+	HWND hFocus = GetFocus();
+	if (hFocus && hFocus != (HWND)mContext.nativeWindowHandle) {
+		char className[256] = {0};
+		GetClassNameA(hFocus, className, sizeof(className));
+		std::string cls = className;
+		std::transform(cls.begin(), cls.end(), cls.begin(), ::tolower);
+		// exempt our plugin wrapper classes from the text-input heuristic
+		if (cls != "vsteditorclass" && cls != "vst3editorclass" && cls.find("edit") != std::string::npos) {
+			return;
+		}
+	}
+
+	static bool spaceWasDown = false;
+	bool spaceIsDown = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
+	if (spaceIsDown && !spaceWasDown) {
+		TogglePlayStop();
+	}
+	spaceWasDown = spaceIsDown;
+
+	bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+
+	static bool sWasDown = false;
+	bool sIsDown = (GetAsyncKeyState('S') & 0x8000) != 0;
+	if (ctrl && sIsDown && !sWasDown) {
+		SaveProject();
+	}
+	sWasDown = sIsDown;
+
+	static bool gWasDown = false;
+	bool gIsDown = (GetAsyncKeyState('G') & 0x8000) != 0;
+	if (ctrl && gIsDown && !gWasDown) {
+		if (Project* p = GetProject()) {
+			if (!mContext.state.multiSelectedTracks.empty()) {
+				p->GroupSelectedTracks(mContext.state.multiSelectedTracks);
+				mContext.state.multiSelectedTracks.clear();
+			}
+		}
+	}
+	gWasDown = gIsDown;
+
+#else
 	// focus states where possible
 	if (ImGui::GetIO().WantTextInput)
 		return;
@@ -261,6 +317,7 @@ void Editor::HandleGlobalShortcuts() {
 			}
 		}
 	}
+#endif
 }
 
 void Editor::RenderMenuBar() {
@@ -293,9 +350,6 @@ void Editor::RenderMenuBar() {
 }
 
 void Editor::ProcessComputerKeyboardMIDI() {
-	if (ImGui::GetIO().WantTextInput)
-		return;
-
 #ifdef _WIN32
 	// only process raw MIDI if main window is focused
 	DWORD foregroundPid = 0;
@@ -303,7 +357,13 @@ void Editor::ProcessComputerKeyboardMIDI() {
 	if (hWndFG)
 		GetWindowThreadProcessId(hWndFG, &foregroundPid);
 
-	if (foregroundPid != GetCurrentProcessId()) {
+	bool isOurProcessForeground = (foregroundPid == GetCurrentProcessId());
+	bool isMainWindowForeground = (hWndFG == (HWND)mContext.nativeWindowHandle);
+
+	if (isMainWindowForeground && ImGui::GetIO().WantTextInput)
+		return;
+
+	if (!isOurProcessForeground) {
 		// if not focused, release all notes
 		if (!mContext.state.activeMIDINotes.empty()) {
 			for (int note : mContext.state.activeMIDINotes)
@@ -311,6 +371,18 @@ void Editor::ProcessComputerKeyboardMIDI() {
 			mContext.state.activeMIDINotes.clear();
 		}
 		return;
+	}
+
+	HWND hFocus = GetFocus();
+	if (hFocus && hFocus != (HWND)mContext.nativeWindowHandle) {
+		char className[256] = {0};
+		GetClassNameA(hFocus, className, sizeof(className));
+		std::string cls = className;
+		std::transform(cls.begin(), cls.end(), cls.begin(), ::tolower);
+		// exempt our plugin wrapper classes from the text-input heuristic
+		if (cls != "vsteditorclass" && cls != "vst3editorclass" && cls.find("edit") != std::string::npos) {
+			return;
+		}
 	}
 
 	static bool mWasDown = false;
@@ -379,12 +451,18 @@ void Editor::ProcessComputerKeyboardMIDI() {
 	}
 #else
 	// cross-platform logic
+	if (ImGui::GetIO().WantTextInput)
+		return;
+
 	if (ImGui::IsKeyPressed(ImGuiKey_M, false))
 		mContext.state.isComputerMIDIKeyboardEnabled = !mContext.state.isComputerMIDIKeyboardEnabled;
 
 	if (!mContext.state.isComputerMIDIKeyboardEnabled) {
-		if (!mContext.state.activeMIDINotes.empty())
+		if (!mContext.state.activeMIDINotes.empty()) {
+			for (int note : mContext.state.activeMIDINotes)
+				mContext.engine.SendMIDIEvent(0x80, note, 0);
 			mContext.state.activeMIDINotes.clear();
+		}
 		return;
 	}
 	if (ImGui::IsKeyPressed(ImGuiKey_Z, false))
