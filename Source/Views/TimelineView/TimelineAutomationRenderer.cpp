@@ -76,6 +76,13 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 		float minVal = t->mSelectedAutomationParam->minValue;
 		float maxVal = t->mSelectedAutomationParam->maxValue;
 		float range = maxVal - minVal;
+		if (range <= 0.0001f)
+			range = 1.0f; // prevent divide by zero
+
+		float padY = 12.0f; // vertical padding to keep points grabbable away from edges
+		float curveTopY = trackMin.y + padY;
+		float curveBottomY = trackMax.y - padY;
+		float curveHeight = curveBottomY - curveTopY;
 
 		ImVec2 mousePos = ImGui::GetMousePos();
 		double mouseBeat = (mousePos.x - winPos.x) / context.state.pixelsPerBeat;
@@ -86,14 +93,14 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 		if (mouseBeat < 0)
 			mouseBeat = 0;
 
-		float mouseNormY = (trackMax.y - mousePos.y) / (trackMax.y - trackMin.y);
+		float mouseNormY = (curveBottomY - mousePos.y) / curveHeight;
 		float mouseVal = minVal + mouseNormY * range;
 		mouseVal = std::clamp(mouseVal, minVal, maxVal);
 
 		// draw curve
 		if (curve->points.empty()) {
 			float norm = (t->mSelectedAutomationParam->value - minVal) / range;
-			float yLine = trackMax.y - norm * (trackMax.y - trackMin.y);
+			float yLine = curveBottomY - norm * curveHeight;
 
 			// dotted line when no automation points exist
 			float dashSize = 8.0f;
@@ -125,7 +132,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 			if (!curve->points.empty()) {
 				float val = curve->points[0].value;
 				float norm = (val - minVal) / range;
-				float py = trackMax.y - norm * (trackMax.y - trackMin.y);
+				float py = curveBottomY - norm * curveHeight;
 				float px = winPos.x + (float)(curve->points[0].beat * context.state.pixelsPerBeat);
 				drawList->AddLine(ImVec2(trackMin.x, py), ImVec2(px, py), IM_COL32(255, 100, 100, 200), 2.0f);
 			}
@@ -142,8 +149,8 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 				if (x2 < winPos.x + scrollX || x1 > winPos.x + viewWidth + scrollX)
 					continue;
 
-				float y1 = trackMax.y - ((p1.value - minVal) / range) * (trackMax.y - trackMin.y);
-				float y2 = trackMax.y - ((p2.value - minVal) / range) * (trackMax.y - trackMin.y);
+				float y1 = curveBottomY - ((p1.value - minVal) / range) * curveHeight;
+				float y2 = curveBottomY - ((p2.value - minVal) / range) * curveHeight;
 
 				const int segments = 24;
 				ImVec2 prevPt(x1, y1);
@@ -203,7 +210,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 			{
 				auto& pLast = curve->points.back();
 				float xLast = winPos.x + (float)(pLast.beat * context.state.pixelsPerBeat);
-				float yLast = trackMax.y - ((pLast.value - minVal) / range) * (trackMax.y - trackMin.y);
+				float yLast = curveBottomY - ((pLast.value - minVal) / range) * curveHeight;
 				drawList->AddLine(ImVec2(xLast, yLast), ImVec2(trackMax.x, yLast), IM_COL32(255, 100, 100, 200), 2.0f);
 			}
 
@@ -211,7 +218,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 			for (size_t pIdx = 0; pIdx < curve->points.size(); ++pIdx) {
 				float val = curve->points[pIdx].value;
 				float norm = (val - minVal) / range;
-				float py = trackMax.y - norm * (trackMax.y - trackMin.y);
+				float py = curveBottomY - norm * curveHeight;
 				float px = winPos.x + (float)(curve->points[pIdx].beat * context.state.pixelsPerBeat);
 
 				// cull points
@@ -240,7 +247,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 			for (int pIdx = 0; pIdx < (int)curve->points.size(); ++pIdx) {
 				float val = curve->points[pIdx].value;
 				float norm = (val - minVal) / range;
-				float py = trackMax.y - norm * (trackMax.y - trackMin.y);
+				float py = curveBottomY - norm * curveHeight;
 				float px = winPos.x + (float)(curve->points[pIdx].beat * context.state.pixelsPerBeat);
 
 				float dx = mousePos.x - px;
@@ -256,7 +263,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 				// preview new point
 				float curveVal = curve->Evaluate(mouseBeat);
 				float curveNorm = (curveVal - minVal) / range;
-				float curveY = trackMax.y - curveNorm * (trackMax.y - trackMin.y);
+				float curveY = curveBottomY - curveNorm * curveHeight;
 
 				if (std::abs(mousePos.y - curveY) < 15.0f) {
 					float px = winPos.x + (float)(mouseBeat * context.state.pixelsPerBeat);
@@ -308,7 +315,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 					// marquee start
 					float curveVal = curve->Evaluate(mouseBeat);
 					float curveNorm = (curveVal - minVal) / range;
-					float curveY = trackMax.y - curveNorm * (trackMax.y - trackMin.y);
+					float curveY = curveBottomY - curveNorm * curveHeight;
 					if (std::abs(mousePos.y - curveY) >= 15.0f) {
 						interaction.autoMarqueeActive = true;
 						interaction.autoMarqueeStart = mousePos;
@@ -344,7 +351,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 				for (int k = 0; k < (int)curve->points.size(); ++k) {
 					float val = curve->points[k].value;
 					float norm = (val - minVal) / range;
-					float py = trackMax.y - norm * (trackMax.y - trackMin.y);
+					float py = curveBottomY - norm * curveHeight;
 					float px = winPos.x + (float)(curve->points[k].beat * context.state.pixelsPerBeat);
 
 					if (px >= rMin.x && px <= rMax.x && py >= rMin.y && py <= rMax.y) {
