@@ -4,6 +4,7 @@
 #include "Track.h"
 #include "ProcessorFactory.h"
 #include "Processors/VSTProcessor.h"
+#include "Processors/VST3Processor.h"
 #include <filesystem>
 #include <algorithm>
 #include <mutex>
@@ -145,7 +146,23 @@ void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
 							vST->PrepareToPlay(project->GetTransport().GetSampleRate());
 					}
 				}
-				// 3. new internal
+				// 3. new VST3
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("VST3_PLUGIN")) {
+					std::string data = (const char*)payload->Data;
+					size_t pipe = data.find('|');
+					if (pipe != std::string::npos) {
+						std::string path = data.substr(0, pipe);
+						std::string classID = data.substr(pipe + 1);
+						auto vST = std::make_shared<VST3Processor>(path, classID);
+						if (vST->Load()) {
+							std::lock_guard<std::mutex> lock(project->GetMutex());
+							selectedTrack->InsertProcessor(i, vST);
+							if (project->GetTransport().GetSampleRate() > 0)
+								vST->PrepareToPlay(project->GetTransport().GetSampleRate());
+						}
+					}
+				}
+				// 4. new internal
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("INTERNAL_PLUGIN")) {
 					std::string type = (const char*)payload->Data;
 					std::shared_ptr<AudioProcessor> proc = ProcessorFactory::Instance().Create(type);
