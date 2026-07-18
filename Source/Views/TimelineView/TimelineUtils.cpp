@@ -26,27 +26,47 @@ namespace TimelineUtils {
 
 		bool drawStereo = (channels == 2 && !forceMono);
 
+		// map an absolute source-frame index to its screen x. rectMin.x is the only
+		// moving term as the clip scrolls, so every bin/sample translates smoothly
+		auto FrameToX = [&](double frame) -> float {
+			return rectMin.x + (float)((frame - offsetFrames) / sourceFramesPerPixel);
+		};
+
+		// visible span expressed in absolute source frames
+		double fStartD = (double)(startPx - rectMin.x) * sourceFramesPerPixel + offsetFrames;
+		double fEndD = (double)(endPx - rectMin.x) * sourceFramesPerPixel + offsetFrames;
+
 		auto DrawSegment = [&](float midY, float halfH, int channelIdx) {
+			if (fEndD <= 0.0)
+				return;
+
+			long long visStart = (long long)std::floor(fStartD);
+			long long visEnd = (long long)std::ceil(fEndD);
+			if (visStart < 0)
+				visStart = 0;
+			if (visEnd > (long long)totalFileFrames)
+				visEnd = (long long)totalFileFrames;
+			if (visStart >= visEnd)
+				return;
+
 			if (sourceFramesPerPixel > 1.0) {
-				int scanStep = (int)std::max(1.0, sourceFramesPerPixel / 10.0);
+				// fixed peak bins anchored to an ABSOLUTE sample grid (multiples of
+				// binFrames), NOT to the moving screen columns. each bin covers a constant
+				// source-frame range, so its min/max never changes as the clip scrolls
+				// sub-pixel (follow mode) - the waveform slides but keeps its exact shape
+				size_t binFrames = (size_t)std::max(1.0, std::round(sourceFramesPerPixel));
+				size_t scanStep = (size_t)std::max(1.0, (double)binFrames / 10.0);
 
-				for (float px = startPx; px < endPx; px += 1.0f) {
-					float relX = px - rectMin.x;
+				size_t firstBin = (size_t)visStart / binFrames;
+				size_t lastBin = ((size_t)visEnd + binFrames - 1) / binFrames;
 
-					// apply offsetFrames here to shift view into file
-					double preciseIdxStart = (relX * sourceFramesPerPixel) + offsetFrames;
-					double preciseIdxEnd = ((relX + 1.0f) * sourceFramesPerPixel) + offsetFrames;
-
-					size_t idxStart = (size_t)preciseIdxStart;
-					size_t idxEnd = (size_t)preciseIdxEnd;
-
+				for (size_t b = firstBin; b < lastBin; ++b) {
+					size_t idxStart = b * binFrames;
+					size_t idxEnd = idxStart + binFrames;
 					if (idxStart >= totalFileFrames)
 						break;
 					if (idxEnd > totalFileFrames)
 						idxEnd = totalFileFrames;
-
-					if (idxEnd <= idxStart)
-						continue;
 
 					float minVal = 0.0f, maxVal = 0.0f;
 					bool firstSample = true;
@@ -64,42 +84,38 @@ namespace TimelineUtils {
 						}
 					}
 
-					if (!firstSample) {
-						float y1 = midY + minVal * halfH;
-						float y2 = midY + maxVal * halfH;
+					if (firstSample)
+						continue;
 
-						if (std::abs(y2 - y1) < 1.0f) {
-							y1 -= 0.5f;
-							y2 += 0.5f;
-						}
+					float x0 = FrameToX((double)idxStart);
+					float x1 = FrameToX((double)idxEnd);
+					if (x1 < x0 + 1.0f)
+						x1 = x0 + 1.0f;
 
-						drawList->AddRectFilled(ImVec2(px, y1), ImVec2(px + 1.0f, y2), color);
+					float y1 = midY + minVal * halfH;
+					float y2 = midY + maxVal * halfH;
+					if (std::abs(y2 - y1) < 1.0f) {
+						y1 -= 0.5f;
+						y2 += 0.5f;
 					}
+
+					drawList->AddRectFilled(ImVec2(x0, y1), ImVec2(x1, y2), color);
 				}
 			} else {
-				float traceStartPx = startPx - 2.0f;
-				if (traceStartPx < rectMin.x)
-					traceStartPx = rectMin.x;
-
+				// one sample spans >= 1px: trace a poly-line through the actual samples,
+				// each pinned to its own source-frame position so it scrolls smoothly
+				long long f0 = visStart > 0 ? visStart - 1 : 0; // 1-sample margin at left edge
 				ImVec2 prevPos;
 				bool first = true;
 
-				for (float px = traceStartPx; px < endPx; px += 1.0f) {
-					float relX = px - rectMin.x;
-					double preciseIdx = (relX * sourceFramesPerPixel) + offsetFrames;
-					size_t idx = (size_t)preciseIdx;
+				for (long long f = f0; f < visEnd; ++f) {
+					float val = samples[(size_t)f * channels + channelIdx];
+					ImVec2 currentPos(FrameToX((double)f), midY + val * halfH);
 
-					if (idx >= totalFileFrames)
-						break;
-
-					float val = samples[idx * channels + channelIdx];
-					ImVec2 currentPos(px, midY + val * halfH);
-
-					if (!first) {
+					if (!first)
 						drawList->AddLine(prevPos, currentPos, color, 1.5f);
-					} else {
+					else
 						first = false;
-					}
 					prevPos = currentPos;
 				}
 			}
