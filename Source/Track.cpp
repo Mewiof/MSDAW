@@ -4,6 +4,7 @@
 
 #include "Clips/MIDIClip.h"
 #include "Clips/AudioClip.h"
+#include "Clips/WarpEngine.h"
 #include "ProcessorFactory.h"
 #include "Theme.h"
 #include "Processors/VSTProcessor.h"
@@ -220,44 +221,63 @@ void Track::Process(float* buffer, int numFrames, int numChannels,
 				const auto& samples = audioClip->GetSamples();
 				int clipChannels = audioClip->GetNumChannels();
 
-				// resample + warp + pitch, all decided in one place (shared with the waveform preview)
-				double playbackRate = audioClip->ComputePlaybackRate(context.sampleRate, context.bpm);
-
-				// calculate playback position
+				// output window into this block, shared by both playback paths
 				int64_t overlapStart = max(trackStartSample, clipStartSample);
 				int64_t overlapEnd = min(trackEndSample, clipEndSample);
 				int bufferOffset = (int)(overlapStart - trackStartSample);
 				int processCount = (int)(overlapEnd - overlapStart);
-
-				// map output time to source frames, including offset
 				int64_t outputSamplesSinceClipStart = overlapStart - clipStartSample;
 
-				// calculate offset in source frames
-				double offsetSeconds = offsetBeats * (60.0 / context.bpm); // timeline seconds offset
+				// clip file offset in output frames (same for both paths)
+				double offsetSeconds = offsetBeats * (60.0 / context.bpm);
 				double offsetOutputFrames = offsetSeconds * context.sampleRate;
-				double offsetSourceFrames = offsetOutputFrames * playbackRate;
 
-				double startReadFrame = (double)outputSamplesSinceClipStart * playbackRate + offsetSourceFrames;
+				if (audioClip->UsesGranularEngine() && !samples.empty() && clipChannels > 0 && processCount > 0) {
+					// warped, non-Re-Pitch: the granular engine decouples time from pitch. it is
+					// position-addressable, so it fills this block straight from transport time
+					// just like the linear path -- seek/loop/offline export stay deterministic
+					WarpRenderParams wp;
+					wp.mode = audioClip->GetWarpMode();
+					wp.sampleRate = context.sampleRate;
+					wp.speed = audioClip->ComputeTimeStretchRate(context.sampleRate, context.bpm);
+					wp.pitchRead = audioClip->ComputePitchReadRate(context.sampleRate);
+					double totalSemis = audioClip->GetTransposeSemitones() + audioClip->GetTransposeCents() / 100.0;
+					wp.pitchRatio = std::pow(2.0, totalSemis / 12.0);
+					wp.offsetOutputFrames = offsetOutputFrames;
+					wp.grainSizeMs = audioClip->GetGrainSizeMs();
+					wp.fluctuation = audioClip->GetFluctuation();
+					wp.transientEnvelope = audioClip->GetTransientEnvelope();
+					wp.formants = audioClip->GetFormants();
 
-				for (int i = 0; i < processCount; ++i) {
-					double framePos = startReadFrame + ((double)i * playbackRate);
-					int frameIndex = (int)framePos;
+					RenderWarpedBlock(samples.data(), samples.size(), clipChannels,
+									  outputSamplesSinceClipStart, processCount, numChannels,
+									  &buffer[bufferOffset * numChannels], wp);
+				} else {
+					// unwarped or Re-Pitch: single-rate resample (also drives the waveform preview)
+					double playbackRate = audioClip->ComputePlaybackRate(context.sampleRate, context.bpm);
+					double offsetSourceFrames = offsetOutputFrames * playbackRate;
+					double startReadFrame = (double)outputSamplesSinceClipStart * playbackRate + offsetSourceFrames;
 
-					// bounds check
-					if (frameIndex < 0)
-						continue;
-					if ((size_t)((frameIndex + 1) * clipChannels) >= samples.size())
-						break; // end of file
+					for (int i = 0; i < processCount; ++i) {
+						double framePos = startReadFrame + ((double)i * playbackRate);
+						int frameIndex = (int)framePos;
 
-					double alpha = framePos - frameIndex;
+						// bounds check
+						if (frameIndex < 0)
+							continue;
+						if ((size_t)((frameIndex + 1) * clipChannels) >= samples.size())
+							break; // end of file
 
-					for (int c = 0; c < numChannels; ++c) {
-						int srcC = c % clipChannels;
-						int idx1 = frameIndex * clipChannels + srcC;
-						int idx2 = idx1 + clipChannels;
+						double alpha = framePos - frameIndex;
 
-						float val = samples[idx1] + (float)alpha * (samples[idx2] - samples[idx1]);
-						buffer[(bufferOffset + i) * numChannels + c] += val;
+						for (int c = 0; c < numChannels; ++c) {
+							int srcC = c % clipChannels;
+							int idx1 = frameIndex * clipChannels + srcC;
+							int idx2 = idx1 + clipChannels;
+
+							float val = samples[idx1] + (float)alpha * (samples[idx2] - samples[idx1]);
+							buffer[(bufferOffset + i) * numChannels + c] += val;
+						}
 					}
 				}
 			}

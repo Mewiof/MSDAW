@@ -143,8 +143,55 @@ void ClipView::Render(const ImVec2& pos, float width, float height) {
 					pushUndo(before, "Double clip BPM");
 				}
 
-				// honest note: every mode resamples, so tempo changes shift pitch (Re-Pitch)
-				ImGui::TextDisabled("(all modes: Re-Pitch)");
+				// per-mode controls, mirroring Ableton's per-warp-mode knobs
+				WarpMode mode = ac->GetWarpMode();
+				if (mode == WarpMode::Beats) {
+					double env = ac->GetTransientEnvelope();
+					float fEnv = (float)env;
+					ImGui::SetNextItemWidth(100);
+					bool edited = ImGui::DragFloat("Envelope", &fEnv, 0.005f, 0.0f, 1.0f, "%.2f");
+					beginDrag();
+					if (edited)
+						locked([&]() { ac->SetTransientEnvelope((double)fEnv); });
+					endDrag("Set transient envelope");
+				} else if (mode != WarpMode::RePitch) {
+					// Tones/Texture/Complex/ComplexPro share a grain-size knob
+					double gs = ac->GetGrainSizeMs();
+					float fGs = (float)gs;
+					ImGui::SetNextItemWidth(100);
+					bool edited = ImGui::DragFloat("Grain Size", &fGs, 0.5f, 20.0f, 300.0f, "%.0f ms");
+					beginDrag();
+					if (edited)
+						locked([&]() { ac->SetGrainSizeMs((double)fGs); });
+					endDrag("Set grain size");
+
+					if (mode == WarpMode::Texture) {
+						double fl = ac->GetFluctuation();
+						float fFl = (float)fl;
+						ImGui::SetNextItemWidth(100);
+						bool e2 = ImGui::DragFloat("Fluctuation", &fFl, 0.005f, 0.0f, 1.0f, "%.2f");
+						beginDrag();
+						if (e2)
+							locked([&]() { ac->SetFluctuation((double)fFl); });
+						endDrag("Set fluctuation");
+					}
+					if (mode == WarpMode::ComplexPro) {
+						double fm = ac->GetFormants();
+						float fFm = (float)fm;
+						ImGui::SetNextItemWidth(100);
+						bool e2 = ImGui::DragFloat("Formants", &fFm, 0.005f, 0.0f, 1.0f, "%.2f");
+						beginDrag();
+						if (e2)
+							locked([&]() { ac->SetFormants((double)fFm); });
+						endDrag("Set formants");
+					}
+				}
+
+				// honest one-liner: only Re-Pitch couples tempo to pitch
+				if (mode == WarpMode::RePitch)
+					ImGui::TextDisabled("Tempo change shifts pitch (tape)");
+				else
+					ImGui::TextDisabled("Pitch preserved on tempo change");
 			} else {
 				ImGui::TextDisabled("Warping Disabled");
 				ImGui::TextDisabled("Audio plays at native speed");
@@ -156,6 +203,13 @@ void ClipView::Render(const ImVec2& pos, float width, float height) {
 		{
 			ImGui::Text("Pitch / Transpose");
 			ImGui::Dummy(ImVec2(0, 5));
+
+			// Re-Pitch derives pitch from playback speed, so transpose is meaningless there
+			// (Ableton disables it too); grey the controls out while that mode is active
+			bool repitch = ac->IsWarpingEnabled() && ac->GetWarpMode() == WarpMode::RePitch;
+			if (repitch)
+				ImGui::TextDisabled("Disabled in Re-Pitch");
+			ImGui::BeginDisabled(repitch);
 
 			double semi = ac->GetTransposeSemitones();
 			float fSemi = (float)semi;
@@ -193,6 +247,8 @@ void ClipView::Render(const ImVec2& pos, float width, float height) {
 				});
 				pushUndo(before, "Reset pitch");
 			}
+
+			ImGui::EndDisabled();
 		}
 		ImGui::NextColumn();
 

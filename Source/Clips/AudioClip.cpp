@@ -185,11 +185,14 @@ double AudioClip::GetMaxDurationInBeats(double projectBpm) const {
 
 	if (mWarpingEnabled) {
 		// when warped, the file represents a fixed number of beats defined by msegmentbpm
-		// maxduration = (beatsinfile) / pitchratio
 		// beatsinfile = seconds * (segmentbpm / 60)
-
 		double beatsInFile = fileDurationSecs * (mSegmentBpm / 60.0);
-		return beatsInFile / pitchRatio;
+
+		// granular modes time-stretch to the grid, so transposing no longer resizes the clip;
+		// only Re-Pitch is varispeed, where pitch and length stay coupled like tape speed
+		if (mWarpMode == WarpMode::RePitch)
+			return beatsInFile / pitchRatio;
+		return beatsInFile;
 	} else {
 		// warping disabled: file plays at native speed adjusted by pitch
 		// playbackdurationsecs = filedurationsecs / pitchratio
@@ -237,6 +240,34 @@ double AudioClip::ComputePlaybackRate(double deviceSampleRate, double projectBpm
 	return rate;
 }
 
+double AudioClip::ComputeTimeStretchRate(double deviceSampleRate, double projectBpm) const {
+	double clipSR = (mSampleRate > 0.0) ? mSampleRate : 44100.0;
+	double device = (deviceSampleRate > 0.0) ? deviceSampleRate : 48000.0;
+
+	// resample times warp, deliberately without the pitch factor: this is the rate the
+	// grain anchor marches through the source at, so it sets duration but not pitch
+	double rate = clipSR / device;
+	if (mWarpingEnabled) {
+		double seg = (mSegmentBpm > 0.1) ? mSegmentBpm : 120.0;
+		rate *= projectBpm / seg;
+	}
+	return rate;
+}
+
+double AudioClip::ComputePitchReadRate(double deviceSampleRate) const {
+	double clipSR = (mSampleRate > 0.0) ? mSampleRate : 44100.0;
+	double device = (deviceSampleRate > 0.0) ? deviceSampleRate : 48000.0;
+
+	// resample times pitch, deliberately without the warp factor: reading the source at this
+	// rate inside a grain transposes it without changing how fast we advance through the file
+	double rate = clipSR / device;
+	double totalSemis = mTransposeSemitones + (mTransposeCents / 100.0);
+	if (std::abs(totalSemis) > 0.001) {
+		rate *= std::pow(2.0, totalSemis / 12.0);
+	}
+	return rate;
+}
+
 AudioClipWarpState AudioClip::CaptureWarpState() const {
 	AudioClipWarpState s;
 	s.warpingEnabled = mWarpingEnabled;
@@ -244,6 +275,10 @@ AudioClipWarpState AudioClip::CaptureWarpState() const {
 	s.segmentBpm = mSegmentBpm;
 	s.transposeSemitones = mTransposeSemitones;
 	s.transposeCents = mTransposeCents;
+	s.grainSizeMs = mGrainSizeMs;
+	s.fluctuation = mFluctuation;
+	s.transientEnvelope = mTransientEnvelope;
+	s.formants = mFormants;
 	s.duration = mDuration;
 	s.offset = mOffset;
 	return s;
@@ -255,6 +290,10 @@ void AudioClip::ApplyWarpState(const AudioClipWarpState& state) {
 	mSegmentBpm = state.segmentBpm;
 	mTransposeSemitones = state.transposeSemitones;
 	mTransposeCents = state.transposeCents;
+	mGrainSizeMs = state.grainSizeMs;
+	mFluctuation = state.fluctuation;
+	mTransientEnvelope = state.transientEnvelope;
+	mFormants = state.formants;
 	mDuration = state.duration;
 	mOffset = state.offset;
 }
@@ -267,6 +306,10 @@ void AudioClip::Save(std::ostream& out) {
 	out << "SEG_BPM " << mSegmentBpm << "\n";
 	out << "TRANSPOSE " << mTransposeSemitones << "\n";
 	out << "TRANSPOSE_FINE " << mTransposeCents << "\n";
+	out << "GRAIN_MS " << mGrainSizeMs << "\n";
+	out << "FLUX " << mFluctuation << "\n";
+	out << "TRANSIENT_ENV " << mTransientEnvelope << "\n";
+	out << "FORMANTS " << mFormants << "\n";
 }
 
 void AudioClip::Load(std::istream& in) {
@@ -313,6 +356,14 @@ void AudioClip::Load(std::istream& in) {
 			mTransposeCents = std::stod(line.substr(15));
 		} else if (line.rfind("TRANSPOSE ", 0) == 0) {
 			mTransposeSemitones = std::stod(line.substr(10));
+		} else if (line.rfind("GRAIN_MS ", 0) == 0) {
+			mGrainSizeMs = std::stod(line.substr(9));
+		} else if (line.rfind("FLUX ", 0) == 0) {
+			mFluctuation = std::stod(line.substr(5));
+		} else if (line.rfind("TRANSIENT_ENV ", 0) == 0) {
+			mTransientEnvelope = std::stod(line.substr(14));
+		} else if (line.rfind("FORMANTS ", 0) == 0) {
+			mFormants = std::stod(line.substr(9));
 		}
 	}
 }

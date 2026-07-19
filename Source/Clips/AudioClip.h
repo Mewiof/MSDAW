@@ -21,6 +21,10 @@ struct AudioClipWarpState {
 	double segmentBpm = 120.0;
 	double transposeSemitones = 0.0;
 	double transposeCents = 0.0;
+	double grainSizeMs = 80.0; // per-mode granular knobs ride along so one edit undoes cleanly
+	double fluctuation = 0.0;
+	double transientEnvelope = 0.5;
+	double formants = 1.0;
 	double duration = 4.0; // clamping is part of the edit, so it rides along
 	double offset = 0.0;
 };
@@ -58,6 +62,23 @@ public:
 	void SetTransposeCents(double cents) { mTransposeCents = cents; }
 	double GetTransposeCents() const { return mTransposeCents; }
 
+	// per-mode granular controls (mirror Ableton's per-warp-mode knobs)
+	void SetGrainSizeMs(double ms) { mGrainSizeMs = ms; }
+	double GetGrainSizeMs() const { return mGrainSizeMs; }
+
+	void SetFluctuation(double f) { mFluctuation = f; }
+	double GetFluctuation() const { return mFluctuation; }
+
+	void SetTransientEnvelope(double e) { mTransientEnvelope = e; }
+	double GetTransientEnvelope() const { return mTransientEnvelope; }
+
+	void SetFormants(double f) { mFormants = f; }
+	double GetFormants() const { return mFormants; }
+
+	// true when the granular time-stretch engine drives playback, i.e. warped in any mode
+	// except Re-Pitch (which is intentionally tape-style resampling and bypasses the engine)
+	bool UsesGranularEngine() const { return mWarpingEnabled && mWarpMode != WarpMode::RePitch; }
+
 	// helper to calculate max duration in beats
 	double GetMaxDurationInBeats(double projectBpm) const;
 	// clamps duration to file end based on project bpm
@@ -65,9 +86,18 @@ public:
 
 	// source frames advanced per output sample: base resample (file->device) times
 	// the warp stretch (project/segment bpm, only when warped) times the pitch factor.
-	// the single place playback speed is decided, so the waveform preview and the
-	// audio thread never drift; a future time-stretcher would branch off this
+	// the single place varispeed playback speed is decided (Re-Pitch and unwarped), so the
+	// waveform preview and the audio thread never drift. granular modes split it into the two
+	// rates below so time and pitch move independently
 	double ComputePlaybackRate(double deviceSampleRate, double projectBpm) const;
+
+	// time base for the granular engine: resample times warp, but NOT pitch. this is what the
+	// grain anchor advances at, so it governs duration/grid-sync while pitch stays put
+	double ComputeTimeStretchRate(double deviceSampleRate, double projectBpm) const;
+
+	// grain-internal read rate: resample times pitch, but NOT warp. reading the source at this
+	// rate inside a grain shifts pitch without touching the clip's length on the grid
+	double ComputePitchReadRate(double deviceSampleRate) const;
 
 	// warp/pitch state snapshot for undo and for grabbing a drag's "before"
 	AudioClipWarpState CaptureWarpState() const;
@@ -88,4 +118,10 @@ private:
 	double mSegmentBpm = 120.0;
 	double mTransposeSemitones = 0.0;
 	double mTransposeCents = 0.0;
+
+	// per-mode granular controls
+	double mGrainSizeMs = 80.0;		 // Tones/Texture/Complex grain length
+	double mFluctuation = 0.0;		 // Texture randomization, 0..1
+	double mTransientEnvelope = 0.5; // Beats grain fade shaping, 0..1
+	double mFormants = 1.0;			 // ComplexPro formant compensation, 0..1
 };

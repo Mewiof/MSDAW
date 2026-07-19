@@ -363,8 +363,13 @@ void TimelineClipRenderer::DrawClipContent(ImDrawList* drawList,
 				projectBpm = project->GetTransport().GetBpm();
 				if (projectSR == 0.0)
 					projectSR = 48000.0;
-				// same rate the audio thread uses, so the drawn waveform density matches playback
-				playbackRate = audioClip->ComputePlaybackRate(projectSR, projectBpm);
+				// map pixels to source frames the same way the audio thread advances through the
+				// file. granular modes advance at the pitch-independent time base, so the waveform
+				// keeps its width regardless of transpose; Re-Pitch/unwarped use the full varispeed
+				// rate where pitch does compress the drawn waveform
+				playbackRate = audioClip->UsesGranularEngine()
+								   ? audioClip->ComputeTimeStretchRate(projectSR, projectBpm)
+								   : audioClip->ComputePlaybackRate(projectSR, projectBpm);
 			}
 
 			// calculate density
