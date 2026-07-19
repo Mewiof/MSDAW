@@ -15,6 +15,11 @@ void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionSta
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	Project* project = context.GetProject();
 
+	// shared_ptr to this track, used when recording clip undo actions
+	std::shared_ptr<Track> trackPtr = nullptr;
+	if (project && trackIndex >= 0 && trackIndex < (int)project->GetTracks().size())
+		trackPtr = project->GetTracks()[trackIndex];
+
 	ImGui::SetCursorScreenPos(ImVec2(winPos.x + scrollX, yPos));
 	ImGui::SetNextItemAllowOverlap();
 	float fullRowHeight = context.layout.trackRowHeight + context.layout.trackGap;
@@ -34,7 +39,10 @@ void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionSta
 			clip->SetName("New Clip");
 			clip->SetStartBeat(clickBeat);
 			clip->SetDuration(4.0);
+			auto before = ClipSnapshotAction::Snapshot(trackPtr);
 			t->AddClip(clip);
+			if (trackPtr)
+				context.undoManager.Push(std::make_unique<ClipSnapshotAction>(project, trackPtr, before, ClipSnapshotAction::Snapshot(trackPtr), "Add clip"));
 		}
 		if (interaction.clipboard) {
 			ImGui::Separator();
@@ -42,7 +50,10 @@ void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionSta
 				auto newClip = CloneClip(interaction.clipboard);
 				if (newClip) {
 					newClip->SetStartBeat(clickBeat);
+					auto before = ClipSnapshotAction::Snapshot(trackPtr);
 					t->AddClip(newClip);
+					if (trackPtr)
+						context.undoManager.Push(std::make_unique<ClipSnapshotAction>(project, trackPtr, before, ClipSnapshotAction::Snapshot(trackPtr), "Paste clip"));
 					context.state.selectedClip = newClip;
 					context.state.selectedTrackIndex = trackIndex;
 				}
@@ -83,7 +94,10 @@ void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionSta
 					auto newClip = CloneClip(clip);
 					if (newClip) {
 						newClip->SetStartBeat(clip->GetEndBeat());
+						auto before = ClipSnapshotAction::Snapshot(trackPtr);
 						t->AddClip(newClip);
+						if (trackPtr)
+							context.undoManager.Push(std::make_unique<ClipSnapshotAction>(project, trackPtr, before, ClipSnapshotAction::Snapshot(trackPtr), "Duplicate clip"));
 						context.state.selectedClip = newClip;
 					}
 				}
@@ -123,6 +137,9 @@ void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionSta
 			if (isActivated) {
 				context.state.selectedClip = clip;
 				context.state.selectedTrackIndex = trackIndex;
+
+				// snapshot the track's clips for undo of the drag/resize about to begin
+				interaction.dragClipsBefore = ClipSnapshotAction::Snapshot(trackPtr);
 
 				interaction.dragOriginalStart = clip->GetStartBeat();
 				interaction.dragOriginalDuration = clip->GetDuration();
@@ -241,17 +258,28 @@ void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionSta
 						}
 					} else {
 						// same track
+						bool moved = (interaction.dragCurrentBeat != interaction.dragOriginalStart);
 						clip->SetStartBeat(interaction.dragCurrentBeat);
 						t->ResolveOverlaps(clip);
+						if (trackPtr && moved)
+							context.undoManager.Push(std::make_unique<ClipSnapshotAction>(project, trackPtr, interaction.dragClipsBefore, ClipSnapshotAction::Snapshot(trackPtr), "Move clip"));
 					}
 				} else if (interaction.dragState == DragState::ResizingLeft) {
+					bool changed = (interaction.dragCurrentBeat != interaction.dragOriginalStart) ||
+								   (interaction.dragCurrentDuration != interaction.dragOriginalDuration) ||
+								   (interaction.dragCurrentOffset != interaction.dragOriginalOffset);
 					clip->SetStartBeat(interaction.dragCurrentBeat);
 					clip->SetDuration(interaction.dragCurrentDuration);
 					clip->SetOffset(interaction.dragCurrentOffset);
 					t->ResolveOverlaps(clip);
+					if (trackPtr && changed)
+						context.undoManager.Push(std::make_unique<ClipSnapshotAction>(project, trackPtr, interaction.dragClipsBefore, ClipSnapshotAction::Snapshot(trackPtr), "Resize clip"));
 				} else if (interaction.dragState == DragState::ResizingRight) {
+					bool changed = (interaction.dragCurrentDuration != interaction.dragOriginalDuration);
 					clip->SetDuration(interaction.dragCurrentDuration);
 					t->ResolveOverlaps(clip);
+					if (trackPtr && changed)
+						context.undoManager.Push(std::make_unique<ClipSnapshotAction>(project, trackPtr, interaction.dragClipsBefore, ClipSnapshotAction::Snapshot(trackPtr), "Resize clip"));
 				}
 
 				// reset

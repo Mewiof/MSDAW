@@ -4,6 +4,7 @@
 #include "ProcessorFactory.h"
 #include "Processors/VSTProcessor.h"
 #include "Processors/VST3Processor.h"
+#include "Undo/Actions.h"
 #include <algorithm>
 #include <vector>
 #include <cmath>
@@ -55,7 +56,9 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TRACK_MOVE")) {
 				TrackMovePayload* data = (TrackMovePayload*)payload->Data;
 				if (data->srcIndex != (int)i) {
-					project->MoveTrack(data->srcIndex, (int)i, false);
+					TrackTopologyAction::Record(mContext.undoManager, project, "Move track", [&] {
+						project->MoveTrack(data->srcIndex, (int)i, false);
+					});
 				}
 			}
 			ImGui::EndDragDropTarget();
@@ -131,7 +134,9 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TRACK_MOVE")) {
 					TrackMovePayload* data = (TrackMovePayload*)payload->Data;
 					if (data->srcIndex != (int)i)
-						project->MoveTrack(data->srcIndex, (int)i, true);
+						TrackTopologyAction::Record(mContext.undoManager, project, "Move track", [&] {
+							project->MoveTrack(data->srcIndex, (int)i, true);
+						});
 				}
 			}
 
@@ -198,7 +203,9 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 				}
 			} else {
 				if (!mContext.state.multiSelectedTracks.empty() && ImGui::MenuItem("Group Tracks (Ctrl+G)")) {
-					project->GroupSelectedTracks(mContext.state.multiSelectedTracks);
+					TrackTopologyAction::Record(mContext.undoManager, project, "Group tracks", [&] {
+						project->GroupSelectedTracks(mContext.state.multiSelectedTracks);
+					});
 					mContext.state.multiSelectedTracks.clear();
 				}
 			}
@@ -336,7 +343,9 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 	if (ImGui::BeginDragDropTarget()) {
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TRACK_MOVE")) {
 			TrackMovePayload* data = (TrackMovePayload*)payload->Data;
-			project->MoveTrack(data->srcIndex, (int)tracks.size(), false);
+			TrackTopologyAction::Record(mContext.undoManager, project, "Move track", [&] {
+				project->MoveTrack(data->srcIndex, (int)tracks.size(), false);
+			});
 		}
 		ImGui::EndDragDropTarget();
 	}
@@ -348,17 +357,23 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 
 	ImGui::SetCursorScreenPos(ImVec2(fixedPos.x + 8 * mContext.state.mainScale, stickyY + 4 * mContext.state.mainScale));
 	if (ImGui::Button("+ Add Track", ImVec2(width - 16 * mContext.state.mainScale, 22 * mContext.state.mainScale))) {
-		project->CreateTrack();
+		TrackTopologyAction::Record(mContext.undoManager, project, "Add track", [&] {
+			project->CreateTrack();
+		});
 	}
 
 	if (trackToProcess != -1) {
 		if (action == Delete) {
-			project->RemoveTrack(trackToProcess);
+			TrackTopologyAction::Record(mContext.undoManager, project, "Delete track", [&] {
+				project->RemoveTrack(trackToProcess);
+			});
 			mContext.state.multiSelectedTracks.clear();
 			if (mContext.state.selectedTrackIndex >= (int)tracks.size())
 				mContext.state.selectedTrackIndex = std::max(0, (int)tracks.size() - 1);
 		} else if (action == Ungroup) {
-			project->UngroupTrack(trackToProcess);
+			TrackTopologyAction::Record(mContext.undoManager, project, "Ungroup track", [&] {
+				project->UngroupTrack(trackToProcess);
+			});
 		}
 	}
 

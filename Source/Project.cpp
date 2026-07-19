@@ -231,6 +231,11 @@ void Project::SetSelectedTrack(int index) {
 	mSelectedTrackIndex = index;
 }
 
+void Project::RestoreTracks(std::vector<std::shared_ptr<Track>> tracks) {
+	std::lock_guard<std::mutex> lock(mMutex);
+	mTracks = std::move(tracks);
+}
+
 void Project::PrepareToPlayInternal(double sampleRate) {
 	mTransport.SetSampleRate(sampleRate);
 	for (auto& track : mTracks) {

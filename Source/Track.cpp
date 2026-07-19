@@ -487,6 +487,16 @@ void Track::SortAutomationPoints(Parameter* param) {
 			  [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
 }
 
+std::vector<AutomationPoint> Track::GetAutomationPoints(Parameter* param) {
+	AutomationCurve* curve = GetAutomationCurve(param);
+	return curve->points;
+}
+
+void Track::SetAutomationPoints(Parameter* param, const std::vector<AutomationPoint>& points) {
+	AutomationCurve* curve = GetAutomationCurve(param);
+	curve->points = points;
+}
+
 bool Track::HasInstrument() const {
 	for (const auto& proc : mProcessors) {
 		if (proc->IsInstrument())

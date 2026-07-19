@@ -86,7 +86,9 @@ bool ContinuousParameter::DrawTypingInput(ImGuiID currentID, float width, float 
 	float maxV = std::max(minValue, maxValue);
 
 	if (enterPressed) {
+		float oldValue = value;
 		value = std::clamp((float)atof(s_TextBuffer), minV, maxV);
+		CommitEditImmediate(oldValue);
 		changed = true;
 		s_TypingID = 0;
 	} else if (ImGui::IsItemDeactivated()) {
@@ -94,7 +96,9 @@ bool ContinuousParameter::DrawTypingInput(ImGuiID currentID, float width, float 
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 			s_TypingID = 0;
 		} else {
+			float oldValue = value;
 			value = std::clamp((float)atof(s_TextBuffer), minV, maxV);
+			CommitEditImmediate(oldValue);
 			changed = true;
 			s_TypingID = 0;
 		}

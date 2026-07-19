@@ -4,6 +4,8 @@
 #include "TimelineUtils.h"
 #include "Clips/AudioClip.h"
 #include "Clips/MIDIClip.h"
+#include "Project.h"
+#include "Undo/Actions.h"
 #include <algorithm>
 #include <cmath>
 
@@ -13,6 +15,33 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	ImGuiIO& io = ImGui::GetIO();
+
+	Project* project = context.GetProject();
+
+	// resolve the owning shared_ptr (handles both regular tracks and master) so
+	// automation undo actions keep the track alive
+	std::shared_ptr<Track> trackPtr = nullptr;
+	if (project) {
+		for (auto& tr : project->GetTracks()) {
+			if (tr.get() == t) {
+				trackPtr = tr;
+				break;
+			}
+		}
+		if (!trackPtr && project->GetMasterTrack().get() == t)
+			trackPtr = project->GetMasterTrack();
+	}
+
+	// compare curves ignoring the transient `selected` flag
+	auto pointsEqual = [](const std::vector<AutomationPoint>& a, const std::vector<AutomationPoint>& b) {
+		if (a.size() != b.size())
+			return false;
+		for (size_t i = 0; i < a.size(); ++i) {
+			if (a[i].beat != b[i].beat || a[i].value != b[i].value || a[i].tension != b[i].tension)
+				return false;
+		}
+		return true;
+	};
 
 	ImVec2 trackMin(winPos.x, yPos);
 	ImVec2 trackMax(winPos.x + contentWidth, yPos + context.layout.trackRowHeight);
@@ -198,6 +227,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 					drawList->AddCircle(ImVec2(midX, midY), 6.0f, IM_COL32(255, 255, 255, 255));
 				}
 				if (isTrackClicked && knobHovered) {
+					interaction.autoEditBefore = curve->points; // undo baseline
 					interaction.autoDragTrackIndex = trackIndex;
 					interaction.autoDragPointIndex = (int)pIdx;
 					interaction.autoDragIsTension = true;
@@ -270,6 +300,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 					drawList->AddCircleFilled(ImVec2(px, curveY), 5.0f, IM_COL32(255, 255, 255, 100));
 
 					if (isTrackClicked && !interaction.autoDragIsTension) {
+						interaction.autoEditBefore = curve->points; // undo baseline (before add)
 						t->AddAutomationPoint(t->mSelectedAutomationParam, mouseBeat, curveVal);
 						// find the index of the newly added point
 						for (int k = 0; k < (int)curve->points.size(); ++k) {
@@ -291,6 +322,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 
 			if (isTrackClicked && !interaction.autoDragIsTension) {
 				if (closestIdx != -1) {
+					interaction.autoEditBefore = curve->points; // undo baseline (before move)
 					if (io.KeyCtrl) {
 						curve->points[closestIdx].selected = !curve->points[closestIdx].selected;
 					} else if (io.KeyShift) {
@@ -365,6 +397,7 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 
 		// context menu logic
 		if (ImGui::BeginPopup("AutomationContext")) {
+			std::vector<AutomationPoint> menuBefore = curve->points; // undo baseline
 			if (ImGui::Selectable("Copy")) {
 				context.state.automationClipboard.clear();
 				std::vector<AutomationPoint> sortedSel;
@@ -456,6 +489,11 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 				}
 				t->SortAutomationPoints(t->mSelectedAutomationParam);
 			}
+			// record any curve mutation the menu performed as one undo step
+			if (trackPtr && !pointsEqual(menuBefore, curve->points)) {
+				context.undoManager.Push(std::make_unique<AutomationEditAction>(
+					project, trackPtr, t->mSelectedAutomationParam, menuBefore, curve->points));
+			}
 			ImGui::EndPopup();
 		}
 
@@ -503,6 +541,11 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 		} else if (interaction.autoDragTrackIndex == trackIndex && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
 			if (!interaction.autoDragIsTension && interaction.autoDragPointIndex != -1) {
 				t->SortAutomationPoints(t->mSelectedAutomationParam);
+			}
+			// commit the whole add/move/tension gesture as one undo step
+			if (trackPtr && interaction.autoDragPointIndex != -1 && !pointsEqual(interaction.autoEditBefore, curve->points)) {
+				context.undoManager.Push(std::make_unique<AutomationEditAction>(
+					project, trackPtr, t->mSelectedAutomationParam, interaction.autoEditBefore, curve->points));
 			}
 			interaction.autoDragPointIndex = -1;
 			interaction.autoDragTrackIndex = -1;

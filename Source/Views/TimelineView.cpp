@@ -5,6 +5,7 @@
 #include "ProcessorFactory.h"
 #include "Processors/VSTProcessor.h"
 #include "Processors/VST3Processor.h"
+#include "Undo/Actions.h"
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
@@ -213,6 +214,7 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 		ImGui::InvisibleButton("##EmptyTimelineDrop", ImVec2(timelineWidth, fullContentHeight));
 
 		if (ImGui::BeginDragDropTarget()) {
+			auto dropBefore = TrackTopologyAction::Snapshot(project);
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("VST_PLUGIN")) {
 				std::string path = (const char*)payload->Data;
 				std::filesystem::path p(path);
@@ -271,6 +273,9 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 					}
 				}
 			}
+			auto dropAfter = TrackTopologyAction::Snapshot(project);
+			if (dropAfter.size() != dropBefore.size())
+				mContext.undoManager.Push(std::make_unique<TrackTopologyAction>(project, dropBefore, dropAfter, "Add track"));
 			ImGui::EndDragDropTarget();
 		}
 
@@ -340,13 +345,25 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 		TimelineTrackView::RenderTracks(mContext, mInteraction, pendingMove, pendingDelete, winPos, contentWidth - trackListW, timelineWidth, scrollX, trackAreaStartY);
 
 		if (pendingMove.valid) {
-			tracks[pendingMove.fromTrackIdx]->RemoveClip(pendingMove.clip);
+			auto fromTrack = tracks[pendingMove.fromTrackIdx];
+			auto toTrack = tracks[pendingMove.toTrackIdx];
+			auto fromBefore = ClipSnapshotAction::Snapshot(fromTrack);
+			auto toBefore = ClipSnapshotAction::Snapshot(toTrack);
+			fromTrack->RemoveClip(pendingMove.clip);
 			pendingMove.clip->SetStartBeat(pendingMove.newStartBeat);
-			tracks[pendingMove.toTrackIdx]->AddClip(pendingMove.clip);
+			toTrack->AddClip(pendingMove.clip);
 			mContext.state.selectedTrackIndex = pendingMove.toTrackIdx;
+			// record both tracks' clip changes as one undo step
+			mContext.undoManager.BeginTransaction("Move clip");
+			mContext.undoManager.Push(std::make_unique<ClipSnapshotAction>(project, fromTrack, fromBefore, ClipSnapshotAction::Snapshot(fromTrack), "Move clip"));
+			mContext.undoManager.Push(std::make_unique<ClipSnapshotAction>(project, toTrack, toBefore, ClipSnapshotAction::Snapshot(toTrack), "Move clip"));
+			mContext.undoManager.EndTransaction();
 		}
 		if (pendingDelete.valid) {
-			tracks[pendingDelete.trackIdx]->RemoveClip(pendingDelete.clip);
+			auto delTrack = tracks[pendingDelete.trackIdx];
+			auto before = ClipSnapshotAction::Snapshot(delTrack);
+			delTrack->RemoveClip(pendingDelete.clip);
+			mContext.undoManager.Push(std::make_unique<ClipSnapshotAction>(project, delTrack, before, ClipSnapshotAction::Snapshot(delTrack), "Delete clip"));
 			if (mContext.state.selectedClip == pendingDelete.clip)
 				mContext.state.selectedClip = nullptr;
 		}

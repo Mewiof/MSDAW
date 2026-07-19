@@ -2,6 +2,7 @@
 #include "TransportView.h"
 #include "Project.h"
 #include "Transport.h"
+#include "Parameter.h"
 
 void TransportView::Render(const ImVec2& pos, float width, float height) {
 	ImGui::SetNextWindowPos(pos);
@@ -129,6 +130,20 @@ void TransportView::Render(const ImVec2& pos, float width, float height) {
 		if (ImGui::IsItemHovered()) {
 			ImGui::SetTooltip("Computer MIDI Keyboard (M)\nOctave: %d (Z/X)\nVelocity: %d (C/V)",
 							  mContext.state.mIDIOctave, mContext.state.mIDIVelocity);
+		}
+
+		// jump to the automation lane of the last edited knob/parameter
+		ImGui::SameLine();
+		Parameter* lastParam = Parameter::GetLastTouchedParameter();
+		ImGui::BeginDisabled(lastParam == nullptr);
+		if (ImGui::Button("Show Auto", ImVec2(80 * mContext.state.mainScale, 0)) && lastParam)
+			Parameter::RequestAutomation(lastParam);
+		ImGui::EndDisabled();
+		if (ImGui::IsItemHovered()) {
+			if (lastParam)
+				ImGui::SetTooltip("Show automation for last edited parameter:\n%s", lastParam->name.c_str());
+			else
+				ImGui::SetTooltip("Show automation for the last edited parameter\n(edit a knob or slider first)");
 		}
 	}
 	ImGui::SameLine(ImGui::GetWindowWidth() - 150 * mContext.state.mainScale);

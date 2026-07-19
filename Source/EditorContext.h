@@ -8,6 +8,7 @@
 #include "PluginManager.h"
 #include "AudioProcessor.h"
 #include "Track.h"
+#include "Undo/UndoManager.h"
 #include "imgui.h"
 
 struct EditorLayout {
@@ -68,6 +69,7 @@ struct EditorState {
 
 	// window visibility
 	bool showSettingsWindow = false;
+	bool showHistoryWindow = false;
 
 	// MIDI keyboard state
 	bool isComputerMIDIKeyboardEnabled = true;
@@ -95,6 +97,7 @@ struct EditorContext {
 	EditorState state;
 	EditorLayout layout;
 	PluginManager pluginManager;
+	UndoManager undoManager;
 
 	// native window handle
 	void* nativeWindowHandle = nullptr;

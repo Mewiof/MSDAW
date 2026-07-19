@@ -69,6 +69,9 @@ bool KnobParameter::Draw() {
 		bool isActive = ImGui::IsItemActive();
 		bool isHovered = ImGui::IsItemHovered() && !ImGui::IsAnyItemActive();
 
+		if (ImGui::IsItemActivated())
+			BeginEditGesture(); // capture value at drag start (one undo entry per drag)
+
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
 			Select();
 		}
@@ -94,6 +97,7 @@ bool KnobParameter::Draw() {
 
 		if (ImGui::IsItemDeactivated()) {
 			RestoreMousePosition();
+			EndEditGesture(); // commit the drag as a single undo entry
 		}
 
 		// visuals

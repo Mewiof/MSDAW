@@ -49,9 +49,14 @@ public:
 
 	// transport logic
 	void TogglePlayStop();
+
+	// undo/redo
+	void PerformUndo();
+	void PerformRedo();
 private:
 	void RenderMenuBar();
 	void RenderSettingsWindow();
+	void RenderHistoryWindow();
 	void ProcessComputerKeyboardMIDI(); // imgui input
 	void HandleGlobalShortcuts();
 	void PumpPluginEditors(); // per-frame idle for open plugin editor windows

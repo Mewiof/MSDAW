@@ -2,6 +2,7 @@
 #include "Clip.h"
 #include "Clips/AudioClip.h"
 #include "Clips/MIDIClip.h"
+#include "Undo/Actions.h"
 #include "imgui.h"
 #include <memory>
 #include <map>
@@ -51,6 +52,9 @@ struct TimelineInteractionState {
 	double dragCurrentDuration = 0.0;
 	double dragCurrentOffset = 0.0;
 
+	// undo: dragged track's clip state captured at drag start
+	std::vector<ClipSnapshotAction::Entry> dragClipsBefore;
+
 	// automation dragging
 	int autoDragTrackIndex = -1;
 	int autoDragPointIndex = -1;
@@ -60,6 +64,9 @@ struct TimelineInteractionState {
 
 	// automation dragging multiple points: maps index -> original state (beat, value)
 	std::map<int, std::pair<double, float>> autoDragInitialStates;
+
+	// undo: automation curve captured at the start of an edit gesture
+	std::vector<AutomationPoint> autoEditBefore;
 
 	// automation selection state (marquee)
 	bool autoMarqueeActive = false;

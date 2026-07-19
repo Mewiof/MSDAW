@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+#include <functional>
 
 class Parameter {
 public:
@@ -25,7 +27,41 @@ public:
 
 	bool IsSelected() const { return sSelectedParameter == this; }
 	void Select() { sSelectedParameter = this; }
+
+	// ---- edit tracking (undo + "last turned parameter") ----
+	// Draw() implementations call these so that a single user edit becomes one
+	// undo entry and updates the "last touched" parameter.
+	//   - drag widgets: BeginEditGesture() on gesture start, EndEditGesture() on end
+	//   - instant edits (toggle / typed / reset): CommitEditImmediate(oldValue)
+	void BeginEditGesture();
+	void EndEditGesture();
+	void CommitEditImmediate(float oldValue);
+
+	// Editor installs this to record ParameterChangeActions onto the undo stack.
+	static std::function<void(Parameter* param, float oldValue, float newValue)> sOnEditCommitted;
+
+	// last parameter the user actually changed (drives the "show automation for
+	// last parameter" button)
+	static Parameter* GetLastTouchedParameter() { return sLastTouchedParameter; }
+
+	// called when a plugin's OWN editor window reports a parameter change (VST2
+	// audioMasterAutomate / VST3 performEdit). Marks it as the last touched
+	// parameter so "Show Auto" works for plugin knobs too. Coalesced undo for
+	// these is handled via BeginEditGesture/EndEditGesture from the plugin's
+	// begin/end-edit callbacks
+	static void NotifyExternalEdit(Parameter* param) {
+		if (param)
+			sLastTouchedParameter = param;
+	}
+
+	// request that the editor reveal this parameter's automation lane
+	static void RequestAutomation(Parameter* param) { sAutomationRequestParameter = param; }
 protected:
 	static Parameter* sAutomationRequestParameter;
 	static Parameter* sSelectedParameter;
+
+	// edit-gesture state
+	static Parameter* sEditingParam;
+	static float sEditOldValue;
+	static Parameter* sLastTouchedParameter;
 };

@@ -86,6 +86,8 @@ public:
 	void AddClip(std::shared_ptr<Clip> clip);
 	void RemoveClip(std::shared_ptr<Clip> clip);
 	std::vector<std::shared_ptr<Clip>>& GetClips() { return mClips; }
+	// undo support: replace the clip list wholesale, without overlap resolution
+	void SetClips(std::vector<std::shared_ptr<Clip>> clips) { mClips = std::move(clips); }
 
 	// trims or deletes clips that overlap with the activeClip
 	void ResolveOverlaps(std::shared_ptr<Clip> activeClip);
@@ -96,6 +98,10 @@ public:
 	void AddAutomationPoint(Parameter* param, double beat, float value);
 	void RemoveAutomationPoint(Parameter* param, int index);
 	void SortAutomationPoints(Parameter* param);
+
+	// undo support: snapshot/restore a curve's points wholesale
+	std::vector<AutomationPoint> GetAutomationPoints(Parameter* param);
+	void SetAutomationPoints(Parameter* param, const std::vector<AutomationPoint>& points);
 	Parameter* FindParameter(const std::string& name);
 	void EvaluateAutomation(double currentBeat);
 

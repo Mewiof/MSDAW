@@ -3,6 +3,7 @@
 #include "AppConfig.h"
 #include "Processors/VSTProcessor.h"
 #include "Processors/VST3Processor.h"
+#include "Undo/Actions.h"
 
 #include <filesystem>
 #include <algorithm>
@@ -27,9 +28,16 @@ Editor::Editor(AudioEngine& engine)
 	VSTProcessor::OnGlobalKeyEvent = [this](int virtualKey, bool isDown) {
 		this->OnExternalKey(virtualKey, isDown);
 	};
+
+	// record every committed parameter edit onto the undo stack
+	Parameter::sOnEditCommitted = [this](Parameter* param, float oldValue, float newValue) {
+		mContext.undoManager.Push(std::make_unique<ParameterChangeAction>(param, oldValue, newValue));
+	};
 }
 
 Editor::~Editor() {
+	// the callback captures `this`; drop it before we go away
+	Parameter::sOnEditCommitted = nullptr;
 }
 
 void Editor::Init(float scale) {
@@ -67,6 +75,7 @@ void Editor::ClearDragState() {
 void Editor::NewProject() {
 	if (Project* p = GetProject()) {
 		p->Initialize();
+		mContext.undoManager.Clear(); // new object graph — old actions are meaningless
 		mCurrentProjectPath.clear();
 		mContext.state.selectionStart = 0.0;
 		mContext.state.selectionEnd = 0.0;
@@ -157,6 +166,7 @@ void Editor::OpenProject() {
 		mCurrentProjectPath = szFile;
 		if (Project* p = GetProject()) {
 			p->Load(mCurrentProjectPath);
+			mContext.undoManager.Clear(); // freshly loaded graph — discard old history
 
 			const auto& vs = p->GetViewState();
 			mContext.state.pixelsPerBeat = std::max(10.0f, vs.pixelsPerBeat);
@@ -231,6 +241,25 @@ void Editor::TogglePlayStop() {
 	}
 }
 
+void Editor::PerformUndo() {
+	mContext.undoManager.Undo();
+	// topology changes may have shifted or removed the selected track
+	if (Project* p = GetProject()) {
+		int count = (int)p->GetTracks().size();
+		if (mContext.state.selectedTrackIndex >= count)
+			mContext.state.selectedTrackIndex = count - 1;
+	}
+}
+
+void Editor::PerformRedo() {
+	mContext.undoManager.Redo();
+	if (Project* p = GetProject()) {
+		int count = (int)p->GetTracks().size();
+		if (mContext.state.selectedTrackIndex >= count)
+			mContext.state.selectedTrackIndex = count - 1;
+	}
+}
+
 void Editor::OnExternalKey(int virtualKey, bool isDown) {
 #ifdef _WIN32
 	if (!isDown)
@@ -288,12 +317,33 @@ void Editor::HandleGlobalShortcuts() {
 	if (ctrl && gIsDown && !gWasDown) {
 		if (Project* p = GetProject()) {
 			if (!mContext.state.multiSelectedTracks.empty()) {
+				auto before = TrackTopologyAction::Snapshot(p);
 				p->GroupSelectedTracks(mContext.state.multiSelectedTracks);
 				mContext.state.multiSelectedTracks.clear();
+				auto after = TrackTopologyAction::Snapshot(p);
+				mContext.undoManager.Push(std::make_unique<TrackTopologyAction>(p, before, after, "Group tracks"));
 			}
 		}
 	}
 	gWasDown = gIsDown;
+
+	bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+
+	static bool zWasDown = false;
+	bool zIsDown = (GetAsyncKeyState('Z') & 0x8000) != 0;
+	if (ctrl && zIsDown && !zWasDown) {
+		if (shift)
+			PerformRedo(); // Ctrl+Shift+Z
+		else
+			PerformUndo(); // Ctrl+Z
+	}
+	zWasDown = zIsDown;
+
+	static bool yWasDown = false;
+	bool yIsDown = (GetAsyncKeyState('Y') & 0x8000) != 0;
+	if (ctrl && yIsDown && !yWasDown)
+		PerformRedo(); // Ctrl+Y
+	yWasDown = yIsDown;
 
 #else
 	// focus states where possible
@@ -313,11 +363,23 @@ void Editor::HandleGlobalShortcuts() {
 	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_G, false)) {
 		if (Project* p = GetProject()) {
 			if (!mContext.state.multiSelectedTracks.empty()) {
+				auto before = TrackTopologyAction::Snapshot(p);
 				p->GroupSelectedTracks(mContext.state.multiSelectedTracks);
 				mContext.state.multiSelectedTracks.clear();
+				auto after = TrackTopologyAction::Snapshot(p);
+				mContext.undoManager.Push(std::make_unique<TrackTopologyAction>(p, before, after, "Group tracks"));
 			}
 		}
 	}
+
+	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+		if (ImGui::GetIO().KeyShift)
+			PerformRedo();
+		else
+			PerformUndo();
+	}
+	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y, false))
+		PerformRedo();
 #endif
 }
 
@@ -340,7 +402,22 @@ void Editor::RenderMenuBar() {
 				exit(0);
 			ImGui::EndMenu();
 		}
+		if (ImGui::BeginMenu("Edit")) {
+			UndoManager& undo = mContext.undoManager;
+			const char* undoName = undo.PeekUndoName();
+			const char* redoName = undo.PeekRedoName();
+			std::string undoLabel = undoName ? (std::string("Undo ") + undoName) : "Undo";
+			std::string redoLabel = redoName ? (std::string("Redo ") + redoName) : "Redo";
+			if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, undo.CanUndo()))
+				PerformUndo();
+			if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, undo.CanRedo()))
+				PerformRedo();
+			ImGui::EndMenu();
+		}
 		if (ImGui::BeginMenu("Windows")) {
+			if (ImGui::MenuItem("History", nullptr, mContext.state.showHistoryWindow)) {
+				mContext.state.showHistoryWindow = !mContext.state.showHistoryWindow;
+			}
 			if (ImGui::MenuItem("Settings", nullptr, mContext.state.showSettingsWindow)) {
 				mContext.state.showSettingsWindow = !mContext.state.showSettingsWindow;
 			}
@@ -401,23 +478,27 @@ void Editor::ProcessComputerKeyboardMIDI() {
 		return;
 	}
 
+	// ignore these while Ctrl is held so shortcuts (Ctrl+Z/X/C/V) don't also
+	// nudge the octave/velocity
+	bool midiCtrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+
 	static bool zWasDown = false;
-	if ((GetAsyncKeyState('Z') & 0x8000) && !zWasDown)
+	if ((GetAsyncKeyState('Z') & 0x8000) && !zWasDown && !midiCtrl)
 		mContext.state.mIDIOctave = std::max(0, mContext.state.mIDIOctave - 1);
 	zWasDown = (GetAsyncKeyState('Z') & 0x8000) != 0;
 
 	static bool xWasDown = false;
-	if ((GetAsyncKeyState('X') & 0x8000) && !xWasDown)
+	if ((GetAsyncKeyState('X') & 0x8000) && !xWasDown && !midiCtrl)
 		mContext.state.mIDIOctave = std::min(8, mContext.state.mIDIOctave + 1);
 	xWasDown = (GetAsyncKeyState('X') & 0x8000) != 0;
 
 	static bool cWasDown = false;
-	if ((GetAsyncKeyState('C') & 0x8000) && !cWasDown)
+	if ((GetAsyncKeyState('C') & 0x8000) && !cWasDown && !midiCtrl)
 		mContext.state.mIDIVelocity = std::max(1, mContext.state.mIDIVelocity - 20);
 	cWasDown = (GetAsyncKeyState('C') & 0x8000) != 0;
 
 	static bool vWasDown = false;
-	if ((GetAsyncKeyState('V') & 0x8000) && !vWasDown)
+	if ((GetAsyncKeyState('V') & 0x8000) && !vWasDown && !midiCtrl)
 		mContext.state.mIDIVelocity = std::min(127, mContext.state.mIDIVelocity + 20);
 	vWasDown = (GetAsyncKeyState('V') & 0x8000) != 0;
 
@@ -466,13 +547,14 @@ void Editor::ProcessComputerKeyboardMIDI() {
 		}
 		return;
 	}
-	if (ImGui::IsKeyPressed(ImGuiKey_Z, false))
+	bool midiCtrl = ImGui::GetIO().KeyCtrl;
+	if (!midiCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false))
 		mContext.state.mIDIOctave = std::max(0, mContext.state.mIDIOctave - 1);
-	if (ImGui::IsKeyPressed(ImGuiKey_X, false))
+	if (!midiCtrl && ImGui::IsKeyPressed(ImGuiKey_X, false))
 		mContext.state.mIDIOctave = std::min(8, mContext.state.mIDIOctave + 1);
-	if (ImGui::IsKeyPressed(ImGuiKey_C, false))
+	if (!midiCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false))
 		mContext.state.mIDIVelocity = std::max(1, mContext.state.mIDIVelocity - 20);
-	if (ImGui::IsKeyPressed(ImGuiKey_V, false))
+	if (!midiCtrl && ImGui::IsKeyPressed(ImGuiKey_V, false))
 		mContext.state.mIDIVelocity = std::min(127, mContext.state.mIDIVelocity + 20);
 	int baseNote = (mContext.state.mIDIOctave + 1) * 12;
 	struct KeyMapImGui {
@@ -523,6 +605,63 @@ void Editor::PumpPluginEditors() {
 				proc->EditorIdle();
 		}
 	}
+}
+
+void Editor::RenderHistoryWindow() {
+	if (!mContext.state.showHistoryWindow)
+		return;
+
+	UndoManager& undo = mContext.undoManager;
+
+	ImGui::SetNextWindowSize(ImVec2(240 * mContext.state.mainScale, 320 * mContext.state.mainScale), ImGuiCond_FirstUseEver);
+	if (ImGui::Begin("History", &mContext.state.showHistoryWindow)) {
+		std::vector<std::string> labels = undo.GetHistory();
+		int applied = (int)undo.GetAppliedCount();
+
+		// row 0 is the base state; row (i+1) is the state after applying labels[i].
+		// clicking a row jumps there by undoing/redoing the difference
+		int target = -1;
+
+		ImGui::BeginChild("HistoryList", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
+
+		if (ImGui::Selectable("Open", applied == 0))
+			target = 0;
+
+		for (int i = 0; i < (int)labels.size(); ++i) {
+			int rowApplied = i + 1;
+			bool isApplied = rowApplied <= applied; // already-applied (vs redoable)
+			bool isCurrent = rowApplied == applied; // the current state
+
+			if (!isApplied)
+				ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(140, 140, 140, 255)); // greyed = redoable
+
+			std::string rowLabel = labels[i] + "##hist" + std::to_string(i);
+			if (ImGui::Selectable(rowLabel.c_str(), isCurrent))
+				target = rowApplied;
+
+			if (!isApplied)
+				ImGui::PopStyleColor();
+		}
+		ImGui::EndChild();
+
+		ImGui::TextDisabled("%d step%s", applied, applied == 1 ? "" : "s");
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Clear"))
+			undo.Clear();
+
+		// apply the jump (undo/redo the difference between current and target)
+		if (target >= 0 && target != applied) {
+			int delta = target - applied;
+			if (delta < 0) {
+				for (int k = 0; k < -delta; ++k)
+					PerformUndo();
+			} else {
+				for (int k = 0; k < delta; ++k)
+					PerformRedo();
+			}
+		}
+	}
+	ImGui::End();
 }
 
 void Editor::RenderSettingsWindow() {
@@ -657,9 +796,16 @@ void Editor::Render(const ImVec2& fullWorkPos, const ImVec2& fullWorkSize) {
 
 	mPianoRollView->Render();
 	RenderSettingsWindow();
+	RenderHistoryWindow();
 	PumpPluginEditors();
 
 	if (mContext.state.processDrop) {
+		// snapshot track topology so a drop that creates a track is undoable
+		Project* dropProject = GetProject();
+		std::vector<TrackTopologyAction::Entry> dropBefore;
+		if (dropProject)
+			dropBefore = TrackTopologyAction::Snapshot(dropProject);
+
 		std::filesystem::path p(mContext.state.droppedPath);
 		std::string ext = p.extension().string();
 		std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
@@ -696,6 +842,11 @@ void Editor::Render(const ImVec2& fullWorkPos, const ImVec2& fullWorkSize) {
 					}
 				}
 			}
+		}
+		if (dropProject) {
+			auto dropAfter = TrackTopologyAction::Snapshot(dropProject);
+			if (dropAfter.size() != dropBefore.size())
+				mContext.undoManager.Push(std::make_unique<TrackTopologyAction>(dropProject, dropBefore, dropAfter, "Add track"));
 		}
 		mContext.state.processDrop = false;
 	}

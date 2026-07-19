@@ -44,9 +44,25 @@ class VST3ComponentHandler : public Steinberg::Vst::IComponentHandler {
 public:
 	VST3ComponentHandler(AudioProcessor* processor) : mProcessor(processor) {}
 
-	Steinberg::tresult PLUGIN_API beginEdit(Steinberg::Vst::ParamID id) override { return Steinberg::kResultTrue; }
+	Steinberg::tresult PLUGIN_API beginEdit(Steinberg::Vst::ParamID id) override {
+		// plugin GUI started a parameter gesture: capture the value for undo
+		if (mProcessor) {
+			const auto& params = mProcessor->GetParameters();
+			if (id < params.size())
+				params[id]->BeginEditGesture();
+		}
+		return Steinberg::kResultTrue;
+	}
 	Steinberg::tresult PLUGIN_API performEdit(Steinberg::Vst::ParamID id, Steinberg::Vst::ParamValue valueNormalized) override;
-	Steinberg::tresult PLUGIN_API endEdit(Steinberg::Vst::ParamID id) override { return Steinberg::kResultTrue; }
+	Steinberg::tresult PLUGIN_API endEdit(Steinberg::Vst::ParamID id) override {
+		// plugin GUI finished the gesture: commit one undo entry
+		if (mProcessor) {
+			const auto& params = mProcessor->GetParameters();
+			if (id < params.size())
+				params[id]->EndEditGesture();
+		}
+		return Steinberg::kResultTrue;
+	}
 	Steinberg::tresult PLUGIN_API restartComponent(Steinberg::int32 flags) override { return Steinberg::kResultTrue; }
 
 	DECLARE_FUNKNOWN_METHODS

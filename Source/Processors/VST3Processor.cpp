@@ -339,6 +339,8 @@ Steinberg::tresult PLUGIN_API VST3ComponentHandler::performEdit(Steinberg::Vst::
 	const auto& params = mProcessor->GetParameters();
 	if (id < params.size()) {
 		params[id]->value = (float)valueNormalized;
+		// remember this as the last touched param so "Show Auto" targets it
+		Parameter::NotifyExternalEdit(params[id].get());
 	}
 	return Steinberg::kResultTrue;
 }

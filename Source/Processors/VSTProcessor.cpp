@@ -726,7 +726,19 @@ VstIntPtr VSTCALLBACK VSTProcessor::HostCallback(AEffect* effect, VstInt32 opcod
 			if (index < (int)proc->mLastSentValues.size()) {
 				proc->mLastSentValues[index] = opt;
 			}
+			// remember this as the last touched param so "Show Auto" targets it
+			Parameter::NotifyExternalEdit(proc->mParameters[index].get());
 		}
+		return 1;
+	case audioMasterBeginEdit:
+		// plugin GUI started a parameter gesture: capture the value for undo
+		if (proc && index >= 0 && index < (int)proc->mParameters.size())
+			proc->mParameters[index]->BeginEditGesture();
+		return 1;
+	case audioMasterEndEdit:
+		// plugin GUI finished the gesture: commit one undo entry
+		if (proc && index >= 0 && index < (int)proc->mParameters.size())
+			proc->mParameters[index]->EndEditGesture();
 		return 1;
 	case audioMasterGetTime:
 		if (proc) {

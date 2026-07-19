@@ -41,6 +41,11 @@ public:
 	// selection
 	void SetSelectedTrack(int index);
 
+	// undo support: replace the whole track list (order + membership) atomically.
+	// Parent relationships live on the tracks themselves (SetParent), so the
+	// caller restores those before/after as needed.
+	void RestoreTracks(std::vector<std::shared_ptr<Track>> tracks);
+
 	void PrepareToPlay(double sampleRate);
 
 	// set bpm

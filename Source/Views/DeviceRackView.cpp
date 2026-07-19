@@ -6,6 +6,7 @@
 #include "ProcessorFactory.h"
 #include "Processors/VSTProcessor.h"
 #include "Processors/VST3Processor.h"
+#include "Undo/Actions.h"
 #include <filesystem>
 #include <algorithm>
 #include <mutex>
@@ -132,8 +133,14 @@ void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
 						if (srcTrackPtr && moveData->deviceIndex < (int)srcTrackPtr->GetProcessors().size()) {
 							std::lock_guard<std::mutex> lock(project->GetMutex());
 							auto proc = srcTrackPtr->GetProcessors()[moveData->deviceIndex];
-							srcTrackPtr->RemoveProcessor(moveData->deviceIndex);
+							int srcDeviceIndex = moveData->deviceIndex;
+							srcTrackPtr->RemoveProcessor(srcDeviceIndex);
 							selectedTrack->InsertProcessor(i, proc);
+							// record as one undo step: removed from src, inserted into dst
+							mContext.undoManager.BeginTransaction("Move device");
+							mContext.undoManager.Push(std::make_unique<ProcessorPresenceAction>(project, srcTrackPtr, proc, srcDeviceIndex, false));
+							mContext.undoManager.Push(std::make_unique<ProcessorPresenceAction>(project, selectedTrack, proc, i, true));
+							mContext.undoManager.EndTransaction();
 							ImGui::EndDragDropTarget();
 							ImGui::PopID();
 							break;
@@ -149,6 +156,7 @@ void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
 						selectedTrack->InsertProcessor(i, vST);
 						if (project->GetTransport().GetSampleRate() > 0)
 							vST->PrepareToPlay(project->GetTransport().GetSampleRate());
+						mContext.undoManager.Push(std::make_unique<ProcessorPresenceAction>(project, selectedTrack, vST, i, true));
 					}
 				}
 				// 3. new VST3
@@ -164,6 +172,7 @@ void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
 							selectedTrack->InsertProcessor(i, vST);
 							if (project->GetTransport().GetSampleRate() > 0)
 								vST->PrepareToPlay(project->GetTransport().GetSampleRate());
+							mContext.undoManager.Push(std::make_unique<ProcessorPresenceAction>(project, selectedTrack, vST, i, true));
 						}
 					}
 				}
@@ -177,6 +186,7 @@ void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
 						selectedTrack->InsertProcessor(i, proc);
 						if (project->GetTransport().GetSampleRate() > 0)
 							proc->PrepareToPlay(project->GetTransport().GetSampleRate());
+						mContext.undoManager.Push(std::make_unique<ProcessorPresenceAction>(project, selectedTrack, proc, i, true));
 					}
 				}
 
@@ -344,15 +354,23 @@ void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
 			std::lock_guard<std::mutex> lock(project->GetMutex());
 
 			if (action.type == PendingAction::MoveReq) {
+				// convert the "insert-before" dst into a plain final index
+				int finalIdx = (action.dstIdx > action.srcIdx) ? action.dstIdx - 1 : action.dstIdx;
 				selectedTrack->MoveProcessor(action.srcIdx, action.dstIdx);
+				if (finalIdx != action.srcIdx)
+					mContext.undoManager.Push(std::make_unique<ProcessorMoveAction>(project, selectedTrack, action.srcIdx, finalIdx));
 			} else if (action.type == PendingAction::RemoveReq) {
+				auto removed = (action.srcIdx >= 0 && action.srcIdx < (int)processors.size()) ? processors[action.srcIdx] : nullptr;
 				selectedTrack->RemoveProcessor(action.srcIdx);
+				if (removed)
+					mContext.undoManager.Push(std::make_unique<ProcessorPresenceAction>(project, selectedTrack, removed, action.srcIdx, false));
 			} else if (action.type == PendingAction::DuplicateReq) {
 				auto clone = CloneProcessor(processors[action.srcIdx]);
 				if (clone) {
 					if (project->GetTransport().GetSampleRate() > 0)
 						clone->PrepareToPlay(project->GetTransport().GetSampleRate());
 					selectedTrack->InsertProcessor(action.srcIdx + 1, clone);
+					mContext.undoManager.Push(std::make_unique<ProcessorPresenceAction>(project, selectedTrack, clone, action.srcIdx + 1, true));
 				}
 			} else if (action.type == PendingAction::PasteReq) {
 				auto clone = CloneProcessor(mContext.state.processorClipboard);
@@ -360,6 +378,7 @@ void DeviceRackView::Render(const ImVec2& pos, float width, float height) {
 					if (project->GetTransport().GetSampleRate() > 0)
 						clone->PrepareToPlay(project->GetTransport().GetSampleRate());
 					selectedTrack->InsertProcessor(action.dstIdx, clone);
+					mContext.undoManager.Push(std::make_unique<ProcessorPresenceAction>(project, selectedTrack, clone, action.dstIdx, true));
 				}
 			}
 		}
