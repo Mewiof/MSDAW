@@ -10,7 +10,7 @@ public:
 	virtual ~ContinuousParameter() = default;
 
 	// one-row framed value box (drag / type-to-enter / undo / reset), no label line
-	bool DrawCompact(float width, const char* valueFmt) override;
+	bool DrawCompact(float width, const char* valueFmt, bool drawFill = false) override;
 protected:
 	// typing interception
 	void CheckTypingStart(ImGuiID currentID);

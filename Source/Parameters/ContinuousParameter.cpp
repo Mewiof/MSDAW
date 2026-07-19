@@ -7,7 +7,7 @@ char ContinuousParameter::s_TextBuffer[64] = "";
 bool ContinuousParameter::s_FocusNextFrame = false;
 bool ContinuousParameter::s_MoveCursorToEnd = false;
 
-bool ContinuousParameter::DrawCompact(float width, const char* valueFmt) {
+bool ContinuousParameter::DrawCompact(float width, const char* valueFmt, bool drawFill) {
 	bool changed = false;
 	ImGui::PushID(this);
 
@@ -58,6 +58,11 @@ bool ContinuousParameter::DrawCompact(float width, const char* valueFmt) {
 		const Theme& th = Theme::Instance();
 		ImU32 bgColor = ImGui::GetColorU32(isHovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
 		drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), bgColor, ImGui::GetStyle().FrameRounding);
+		if (drawFill) {
+			float fraction = std::clamp((value - minValue) / (maxValue - minValue), 0.0f, 1.0f);
+			ImU32 fillColor = ImGui::GetColorU32(isActive ? ImGuiCol_SliderGrabActive : ImGuiCol_SliderGrab);
+			drawList->AddRectFilled(pos, ImVec2(pos.x + fraction * size.x, pos.y + size.y), fillColor, ImGui::GetStyle().FrameRounding);
+		}
 		drawList->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), IsSelected() ? th.accent : th.border, ImGui::GetStyle().FrameRounding);
 
 		char valText[32];

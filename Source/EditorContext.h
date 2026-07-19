@@ -17,7 +17,7 @@ struct EditorLayout {
 	float libraryWidth = 200.0f;
 	float trackListWidth = 240.0f;
 	float trackRowHeight = 80.0f;
-	float trackGap = 8.0f;
+	float trackGap = 0.0f; // TODO: remove this?
 
 	void Scale(float scale) {
 		transportHeight *= scale;
