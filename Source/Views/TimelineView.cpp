@@ -179,9 +179,12 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 		if (transport && transport->IsPlaying() && mContext.state.followPlayback) {
 			float playheadX = (float)(playbackBeat * mContext.state.pixelsPerBeat);
 
-			float visibleWidth = ImGui::GetContentRegionAvail().x - trackListW;
-			if (visibleWidth <= 0.0f)
-				visibleWidth = width - trackListW;
+			// the visible timeline viewport is exactly timelineWidth wide (beat 0 sits at
+			// content x=0, the track-list column is a fixed overlay to the right). do NOT
+			// use GetContentRegionAvail() here: the window declares an explicit content
+			// size before Begin (for the zoom scrollbar), so it returns the full content
+			// width, which pinned targetScroll at 0 and stalled follow at the far left
+			float visibleWidth = timelineWidth;
 
 			float targetScroll = scrollX;
 			if (mContext.state.followMode == FollowMode::Page) {
