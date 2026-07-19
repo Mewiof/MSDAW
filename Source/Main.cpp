@@ -18,12 +18,36 @@
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "AudioEngine.h"
 #include "Editor.h"
 #include "AppConfig.h"
 #include "Theme.h"
 
 int main(int, char**) {
+#ifdef _WIN32
+	// silence console spam from third-party plugins. Qt-based VST3s (e.g. Melodyne)
+	// warn "QApplication was not created in the main() thread" and then bleed a steady
+	// stream of internal debug output ("result 1") from a worker thread that outlives
+	// the scan. our own logging keeps the CRT stdout/stderr fds captured at startup, so
+	// it is unaffected; plugins load later and resolve GetStdHandle to NUL instead.
+	// must run before the first plugin LoadLibrary (Editor::Init starts the background scan)
+	if (HANDLE nul = CreateFileA("NUL", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr); nul != INVALID_HANDLE_VALUE) {
+		SetStdHandle(STD_OUTPUT_HANDLE, nul);
+		SetStdHandle(STD_ERROR_HANDLE, nul);
+	}
+
+	// plugins that share our C runtime (e.g. the Qt build inside Massive) write their
+	// warnings straight to the process stderr FILE*, which SetStdHandle above cannot
+	// rebind. we never use stderr ourselves (all our logging goes to stdout), so send
+	// the whole stderr stream to NUL to catch that path too
+	FILE* redirectedStderr = freopen("NUL", "w", stderr);
+	(void)redirectedStderr;
+#endif
+
 	// load persisted app-wide settings (e.g. plugin editor DPI default)
 	AppConfig::Instance().Load();
 
