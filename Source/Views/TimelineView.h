@@ -15,4 +15,15 @@ public:
 private:
 	EditorContext& mContext;
 	TimelineInteractionState mInteraction;
+
+	// was the arrangement window hovered last frame. the Ctrl+Wheel zoom is resolved
+	// before Begin (so the scrollbar can be sized from this frame's zoom), which is
+	// too early to ask ImGui::IsWindowHovered() - so we use last frame's answer
+	bool mHoveredLastFrame = false;
+
+	// last frame's scroll-independent content origin (screen x of beat 0 at scroll 0).
+	// the pre-Begin zoom anchor needs it to place the cursor in content space, but it
+	// cannot call GetCursorScreenPos() before Begin exists - so we cache last frame's
+	float mContentLeftX = 0.0f;
+	bool mContentLeftValid = false;
 };

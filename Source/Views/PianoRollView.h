@@ -53,6 +53,11 @@ private:
 	float mScrollX = 0.0f;
 	float mScrollY = 0.0f;
 
+	// was the grid hovered last frame. the Ctrl+Wheel zoom is resolved before the
+	// grid child begins (so its content size can be declared up front), which is too
+	// early to know this frame's hover - so we reuse last frame's result
+	bool mGridHoveredLast = false;
+
 	// auto-center: when the selected clip changes we recenter the view on its
 	// notes. compared by weak_ptr identity so we never deref a stale clip
 	std::weak_ptr<Clip> mLastCenteredClip;

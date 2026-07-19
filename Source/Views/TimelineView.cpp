@@ -15,6 +15,48 @@
 #include "TimelineView/TimelineAutomationRenderer.h"
 
 void TimelineView::Render(const ImVec2& pos, float width, float height, TrackListView* trackListView, float trackListW) {
+	ImGuiIO& io = ImGui::GetIO();
+	float timelineWidth = width - trackListW;
+
+	// resolve Ctrl+Wheel zoom BEFORE Begin so the horizontal scrollbar is both sized
+	// AND positioned from THIS frame's zoom. imgui derives the grab from the content
+	// size + scroll it had at the previous End(), so declaring them up front
+	// (SetNextWindowContentSize / SetNextWindowScroll) removes the one-frame lag that
+	// made the grab jitter in size and position while zooming
+	float zoomOldPPB = mContext.state.pixelsPerBeat;
+	bool didZoom = false;
+	if (mHoveredLastFrame && io.KeyCtrl && io.MouseWheel != 0.0f) {
+		float zoomFactor = io.MouseWheel > 0.0f ? 1.1f : (1.0f / 1.1f);
+		mContext.state.pixelsPerBeat = std::clamp(zoomOldPPB * zoomFactor, 10.0f, 5000.0f);
+		didZoom = mContext.state.pixelsPerBeat != zoomOldPPB;
+	}
+	{
+		double maxBeatDecl = 100.0;
+		if (Project* declProject = mContext.GetProject())
+			for (const auto& t : declProject->GetTracks())
+				for (const auto& c : t->GetClips())
+					maxBeatDecl = std::max(maxBeatDecl, c->GetEndBeat());
+		float neededDecl = (float)(maxBeatDecl * mContext.state.pixelsPerBeat);
+		float contentWidthDecl = std::max(neededDecl, timelineWidth) + trackListW;
+		ImGui::SetNextWindowContentSize(ImVec2(contentWidthDecl, 0.0f)); // 0 y == leave vertical automatic
+	}
+
+	// keep the beat under the cursor pinned across the zoom. mContentLeftX is last
+	// frame's scroll-independent content origin and state.timelineScrollX is last
+	// frame's scroll - together they locate the mouse in content space, letting us
+	// re-derive the scroll that holds that beat steady. applied this frame (not next)
+	// so the grab position tracks the zoom without lag
+	if (didZoom && mContentLeftValid) {
+		float newPPB = mContext.state.pixelsPerBeat;
+		float mouseX = io.MousePos.x;
+		float contentLeft0 = mContentLeftX;
+		double mouseBeat = (double)(mouseX - (contentLeft0 - mContext.state.timelineScrollX)) / zoomOldPPB;
+		float newScrollX = (float)(mouseBeat * newPPB) - (mouseX - contentLeft0);
+		if (newScrollX < 0.0f)
+			newScrollX = 0.0f;
+		ImGui::SetNextWindowScroll(ImVec2(newScrollX, -1.0f)); // -1 y == leave vertical scroll untouched
+	}
+
 	ImGui::SetNextWindowPos(pos);
 	ImGui::SetNextWindowSize(ImVec2(width, height));
 
@@ -22,12 +64,14 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 	ImGui::Begin("Arrangement", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysVerticalScrollbar | ImGuiWindowFlags_NoBringToFrontOnFocus);
 	ImGui::PopStyleVar();
 
+	mHoveredLastFrame = ImGui::IsWindowHovered();
+
 	Project* project = mContext.GetProject();
 	Transport* transport = project ? &project->GetTransport() : nullptr;
 
-	// follow-playback scrolling runs after the zoom block below, so it uses the
-	// updated pixelsPerBeat and does not fight the zoom's mouse anchor (which would
-	// jerk the view toward the cursor for one frame before snapping back)
+	// follow-playback scrolling runs after Begin and reads the post-zoom
+	// pixelsPerBeat (the zoom is resolved before Begin, above), so the two never
+	// fight over the scroll on the same frame
 
 	if (ImGui::IsWindowHovered() && (ImGui::GetIO().MouseWheelH != 0.0f || (ImGui::GetIO().MouseWheel != 0.0f && ImGui::GetIO().KeyShift))) {
 		mContext.state.followPlayback = false;
@@ -44,7 +88,11 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 		float scrollX = ImGui::GetScrollX();
 		auto& tracks = project->GetTracks();
 
-		ImGuiIO& io = ImGui::GetIO();
+		// cache the scroll-independent content origin (stable while the panel does not
+		// move) for next frame's pre-Begin zoom anchor. captured from the pristine
+		// winPos, before the follow-playback block below shifts it
+		mContentLeftX = winPos.x + scrollX;
+		mContentLeftValid = true;
 
 		// sample the transport position once per frame so the follow scroll and the
 		// playhead line are computed from the exact same beat (the audio thread keeps
@@ -121,34 +169,8 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 			}
 		}
 
-		// zoom logic
-		float timelineWidth = width - trackListW;
-
-		if (ImGui::IsWindowHovered() && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0.0f) {
-			float zoomFactor = 1.1f;
-			if (ImGui::GetIO().MouseWheel < 0)
-				zoomFactor = 1.0f / zoomFactor;
-
-			float oldPPB = mContext.state.pixelsPerBeat;
-			float newPPB = std::clamp(oldPPB * zoomFactor, 10.0f, 5000.0f);
-
-			float mouseX = ImGui::GetMousePos().x;
-			float mouseContentX = (mouseX - winPos.x);
-			double mouseBeat = mouseContentX / oldPPB;
-
-			mContext.state.pixelsPerBeat = newPPB;
-
-			float newMouseContentX = (float)(mouseBeat * newPPB);
-			float mouseWindowOffset = mouseX - (winPos.x + scrollX);
-			float newScrollX = newMouseContentX - mouseWindowOffset;
-
-			if (newScrollX < 0.0f)
-				newScrollX = 0.0f;
-
-			ImGui::SetScrollX(newScrollX);
-			winPos.x -= (newScrollX - scrollX);
-			scrollX = newScrollX;
-		}
+		// NOTE: the zoom (pixelsPerBeat, content size and anchored scroll) is fully
+		// resolved before Begin now - see the top of Render. nothing to do here
 
 		// follow playback logic (uses the post-zoom pixelsPerBeat / scrollX, so
 		// zooming while following keeps the playhead pinned instead of jerking)

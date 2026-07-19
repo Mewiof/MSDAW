@@ -155,10 +155,9 @@ void PianoRollView::Render() {
 			mContext.undoManager.Push(std::make_unique<NoteEditAction>(project, midiClipShared, before, after, name));
 	};
 
-	// ---- constants (all DPI-scaled) ----
-	const float NOTE_HEIGHT = mNoteHeight * scale;
+	// ---- constants (all DPI-scaled). NOTE_HEIGHT and PPB are computed after the
+	// zoom block below, so a Ctrl+Wheel zoom takes full effect on the same frame
 	const float KEY_WIDTH = 40.0f * scale;
-	const float PPB = mPixelsPerBeat * scale;
 	const float RULER_H = 22.0f * scale;
 	const float VELO_H = 80.0f * scale;
 	const float PAD = 8.0f * scale;
@@ -220,8 +219,6 @@ void PianoRollView::Render() {
 			maxDuration = n.startBeat + n.durationBeats;
 	}
 	double totalBeats = maxDuration + 1.0;
-	float contentW = (float)totalBeats * PPB;
-	float contentH = 128.0f * NOTE_HEIGHT;
 
 	// ---- pane geometry ----
 	ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -237,6 +234,39 @@ void PianoRollView::Render() {
 		CenterOnClip(mIDIClip, gridW, gridH);
 		mLastCenteredClip = curClip;
 	}
+
+	// ---- Ctrl+Wheel zoom, resolved BEFORE the grid child so the child's content
+	// size and scroll (declared just below via SetNextWindow*) reflect THIS frame's
+	// zoom. previously the grid drew at the new zoom while the horizontal scrollbar
+	// grab still used the previous frame's content size, so the grab jittered ----
+	float prNextScrollX = -1.0f; // < 0 == leave that scroll axis untouched
+	float prNextScrollY = -1.0f;
+	{
+		ImVec2 gridWinPos(origin.x + KEY_WIDTH, origin.y + RULER_H);
+		if (mGridHoveredLast && io.MouseWheel != 0.0f && io.KeyCtrl) {
+			if (io.KeyShift) {
+				// vertical zoom, anchored on the row under the cursor
+				float nhOld = mNoteHeight * scale;
+				double rowAtMouse = (double)(io.MousePos.y - (gridWinPos.y - mScrollY)) / nhOld;
+				mNoteHeight = std::clamp(mNoteHeight * std::pow(1.15f, io.MouseWheel), 6.0f, 48.0f);
+				float nhNew = mNoteHeight * scale;
+				prNextScrollY = std::max(0.0f, (float)(rowAtMouse * nhNew) - (io.MousePos.y - gridWinPos.y));
+			} else {
+				// horizontal zoom, anchored on the beat under the cursor
+				float ppbOld = mPixelsPerBeat * scale;
+				double beatAtMouse = (double)(io.MousePos.x - (gridWinPos.x - mScrollX)) / ppbOld;
+				mPixelsPerBeat = std::clamp(mPixelsPerBeat * std::pow(1.15f, io.MouseWheel), 8.0f, 800.0f);
+				float ppbNew = mPixelsPerBeat * scale;
+				prNextScrollX = std::max(0.0f, (float)(beatAtMouse * ppbNew) - (io.MousePos.x - gridWinPos.x));
+			}
+		}
+	}
+
+	// post-zoom sizing (reflects this frame's zoom)
+	const float NOTE_HEIGHT = mNoteHeight * scale;
+	const float PPB = mPixelsPerBeat * scale;
+	float contentW = (float)totalBeats * PPB;
+	float contentH = 128.0f * NOTE_HEIGHT;
 
 	auto& notes = mIDIClip->GetNotesEx();
 
@@ -258,6 +288,11 @@ void PianoRollView::Render() {
 	// its scroll this same frame and draw at a matching offset (zero lag)
 	// =====================================================================
 	ImGui::SetCursorScreenPos(ImVec2(origin.x + KEY_WIDTH, origin.y + RULER_H));
+	// declare the content size (and, on a zoom, the scroll) up front so the child's
+	// scrollbar is sized and positioned from this frame's zoom with zero lag
+	ImGui::SetNextWindowContentSize(ImVec2(contentW, contentH));
+	if (prNextScrollX >= 0.0f || prNextScrollY >= 0.0f)
+		ImGui::SetNextWindowScroll(ImVec2(prNextScrollX, prNextScrollY)); // < 0 axis == untouched
 	ImGui::BeginChild("prGrid", ImVec2(gridW, gridH), false, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoScrollWithMouse);
 	{
 		// consume a pending auto-center / minimap jump (takes effect next frame)
@@ -277,6 +312,7 @@ void PianoRollView::Render() {
 
 		ImGui::InvisibleButton("##pr_canvas", ImVec2(contentW, contentH));
 		bool gridHovered = ImGui::IsItemHovered();
+		mGridHoveredLast = gridHovered; // feeds next frame's pre-child zoom gate
 
 		ImVec2 mousePos = io.MousePos;
 		double mouseBeat = (double)(mousePos.x - canvas.x) / PPB;
@@ -289,29 +325,16 @@ void PianoRollView::Render() {
 		bool isMouseDoubleClicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
 		bool isMouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
 
-		// ---- wheel: zoom (Ctrl) or scroll. we own wheel handling here
-		// (NoScrollWithMouse on the child) so nothing scrolls behind our back and
-		// the anchored zoom below stays exact ----
+		// ---- wheel scrolling. Ctrl(+Shift) zoom is resolved before the grid child
+		// (see above); here we only handle plain / Shift scrolling. NoScrollWithMouse
+		// on the child means nothing scrolls behind our back ----
 		float maxScrollX = std::max(0.0f, contentW - gridW);
 		float maxScrollY = std::max(0.0f, contentH - gridH);
-		if (gridHovered && io.MouseWheel != 0.0f) {
-			if (io.KeyCtrl && io.KeyShift) {
-				// vertical zoom, anchored on the row under the cursor
-				double rowAtMouse = (mousePos.y - canvas.y) / NOTE_HEIGHT;
-				mNoteHeight = std::clamp(mNoteHeight * std::pow(1.15f, io.MouseWheel), 6.0f, 48.0f);
-				float nhNew = mNoteHeight * scale;
-				ImGui::SetScrollY(std::max(0.0f, (float)(rowAtMouse * nhNew) - (mousePos.y - gridWinPos.y)));
-			} else if (io.KeyCtrl) {
-				// horizontal zoom, anchored on the beat under the cursor
-				double beatAtMouse = (mousePos.x - canvas.x) / PPB;
-				mPixelsPerBeat = std::clamp(mPixelsPerBeat * std::pow(1.15f, io.MouseWheel), 8.0f, 800.0f);
-				float ppbNew = mPixelsPerBeat * scale;
-				ImGui::SetScrollX(std::max(0.0f, (float)(beatAtMouse * ppbNew) - (mousePos.x - gridWinPos.x)));
-			} else if (io.KeyShift) {
+		if (gridHovered && io.MouseWheel != 0.0f && !io.KeyCtrl) {
+			if (io.KeyShift)
 				ImGui::SetScrollX(std::clamp(mScrollX - io.MouseWheel * 60.0f * scale, 0.0f, maxScrollX));
-			} else {
+			else
 				ImGui::SetScrollY(std::clamp(mScrollY - io.MouseWheel * 3.0f * NOTE_HEIGHT, 0.0f, maxScrollY));
-			}
 		}
 		if (gridHovered && io.MouseWheelH != 0.0f && !io.KeyCtrl)
 			ImGui::SetScrollX(std::clamp(mScrollX - io.MouseWheelH * 60.0f * scale, 0.0f, maxScrollX));
