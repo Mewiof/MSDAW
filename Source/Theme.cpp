@@ -9,27 +9,35 @@ Theme& Theme::Instance() {
 // the concrete default palette. neutral dark gray (no blue tint), Ableton-like,
 // with a single amber/gold accent. this is the ONE place the numbers live
 Theme::Theme() {
-	// surfaces - deliberately wide steps so stacked levels (panel > control >
-	// recessed well) stay visually distinct instead of merging into one flat gray
-	bgDeepest = IM_COL32(16, 16, 18, 255);
-	inputBg = IM_COL32(24, 24, 27, 255);
-	bgWindow = IM_COL32(31, 31, 34, 255);
-	bgHeader = IM_COL32(39, 39, 43, 255);
-	bgDeviceEffect = IM_COL32(43, 43, 48, 255);
-	bgPanel = IM_COL32(48, 48, 53, 255);
-	bgDeviceInstrument = IM_COL32(58, 58, 64, 255);
-	bgPanelAlt = IM_COL32(62, 62, 68, 255);
-	bgHover = IM_COL32(78, 78, 86, 255);
-	bgActive = IM_COL32(96, 96, 105, 255);
-	bgOverlay = IM_COL32(22, 22, 26, 230);
+	// surfaces, darkest -> lightest. stepped by roughly even *perceptual* (CIE L*)
+	// distance rather than even rgb: near black a few rgb apart already separates,
+	// higher up you need a wider gap for the same visible jump. the old ladder was
+	// even in rgb, so header/deviceEffect/panel sat ~1.7 L* apart and melted into
+	// one gray wash. the canvas stays deep while panels read as raised cards on it
+	bgDeepest = IM_COL32(15, 15, 17, 255);			// wells, plot interiors, bypassed device
+	inputBg = IM_COL32(24, 24, 27, 255);			// recessed control backgrounds
+	bgWindow = IM_COL32(32, 32, 36, 255);			// main window + timeline canvas
+	bgHeader = IM_COL32(40, 40, 45, 255);			// sticky header strips (a step under panel)
+	bgDeviceEffect = IM_COL32(46, 46, 51, 255);		// effect device slot, a raised card on the canvas
+	bgPanel = IM_COL32(52, 52, 58, 255);			// track rows, ruler, ordinary panels
+	bgDeviceInstrument = IM_COL32(62, 62, 69, 255); // instrument slot, heavier than an effect
+	bgPanelAlt = IM_COL32(68, 68, 75, 255);			// raised buttons, popups, group rows
+	bgHover = IM_COL32(84, 84, 92, 255);			// hovered frame/row/button
+	bgActive = IM_COL32(100, 100, 109, 255);		// selected row (neutral, never the accent)
+	bgOverlay = IM_COL32(18, 18, 22, 236);			// translucent box floating over the canvas
 
-	// lines & borders - brighter than before so outlines actually delineate
-	border = IM_COL32(72, 72, 80, 255);
-	borderStrong = IM_COL32(96, 96, 105, 255);
-	divider = IM_COL32(14, 14, 16, 255);
-	gridSub = IM_COL32(96, 96, 102, 45);
-	gridBeat = IM_COL32(102, 102, 110, 90);
-	gridBar = IM_COL32(132, 132, 142, 120);
+	// lines & borders - kept a hair brighter than the surfaces they sit on so
+	// delineation comes from crisp 1px edges, not from cranking fill contrast
+	border = IM_COL32(78, 78, 86, 255);
+	borderStrong = IM_COL32(104, 104, 114, 255);
+	divider = IM_COL32(14, 14, 16, 255); // near-black grout between rows/sections
+
+	// grid - the old bar line landed ~20 L* over the canvas and read as a hard
+	// fence competing with the clips. these sit only a few L* above the background:
+	// present as structure, never louder than what is drawn on top. sub < beat < bar
+	gridSub = IM_COL32(105, 105, 116, 28);
+	gridBeat = IM_COL32(114, 114, 126, 55);
+	gridBar = IM_COL32(122, 122, 136, 78);
 
 	// text
 	text = IM_COL32(230, 230, 230, 255);
