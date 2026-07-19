@@ -8,6 +8,9 @@ public:
 		: Parameter(name, value, minValue, maxValue) {}
 
 	virtual ~ContinuousParameter() = default;
+
+	// one-row framed value box (drag / type-to-enter / undo / reset), no label line
+	bool DrawCompact(float width, const char* valueFmt) override;
 protected:
 	// typing interception
 	void CheckTypingStart(ImGuiID currentID);

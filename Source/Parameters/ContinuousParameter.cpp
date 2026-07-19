@@ -1,10 +1,77 @@
 #include "PrecompHeader.h"
 #include "ContinuousParameter.h"
+#include "Theme.h"
 
 ImGuiID ContinuousParameter::s_TypingID = 0;
 char ContinuousParameter::s_TextBuffer[64] = "";
 bool ContinuousParameter::s_FocusNextFrame = false;
 bool ContinuousParameter::s_MoveCursorToEnd = false;
+
+bool ContinuousParameter::DrawCompact(float width, const char* valueFmt) {
+	bool changed = false;
+	ImGui::PushID(this);
+
+	ImGuiID currentID = ImGui::GetID("##CompactBtn");
+	CheckTypingStart(currentID);
+
+	if (IsTyping(currentID)) {
+		changed |= DrawTypingInput(currentID, width);
+	} else {
+		ImVec2 pos = ImGui::GetCursorScreenPos();
+		ImVec2 size(width, ImGui::GetFrameHeight());
+
+		ImGui::InvisibleButton("##CompactBtn", size);
+
+		bool isActive = ImGui::IsItemActive();
+		bool isHovered = ImGui::IsItemHovered() && !ImGui::IsAnyItemActive();
+
+		if (ImGui::IsItemActivated())
+			BeginEditGesture(); // capture value at drag start (one undo entry per drag)
+
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemClicked(ImGuiMouseButton_Right))
+			Select();
+
+		if (isActive) {
+			ImGui::SetMouseCursor(ImGuiMouseCursor_None);
+
+			float deltaY = GetSafeMouseDeltaY();
+			if (deltaY != 0.0f) {
+				float range = maxValue - minValue;
+				float sensitivity = range / 200.0f;
+				if (ImGui::GetIO().KeyShift)
+					sensitivity *= 0.1f;
+
+				float minV = std::min(minValue, maxValue);
+				float maxV = std::max(minValue, maxValue);
+				value = std::clamp(value - (deltaY * sensitivity), minV, maxV);
+				changed = true;
+			}
+			HandleInfiniteDrag();
+		}
+
+		if (ImGui::IsItemDeactivated()) {
+			RestoreMousePosition();
+			EndEditGesture(); // commit the drag as a single undo entry
+		}
+
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const Theme& th = Theme::Instance();
+		ImU32 bgColor = ImGui::GetColorU32(isHovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
+		drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), bgColor, ImGui::GetStyle().FrameRounding);
+		drawList->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), IsSelected() ? th.accent : th.border, ImGui::GetStyle().FrameRounding);
+
+		char valText[32];
+		snprintf(valText, sizeof(valText), valueFmt, value);
+		ImVec2 textSize = ImGui::CalcTextSize(valText);
+		ImVec2 textPos = ImVec2(pos.x + (size.x - textSize.x) * 0.5f, pos.y + (size.y - textSize.y) * 0.5f);
+		drawList->AddText(textPos, ImGui::GetColorU32(ImGuiCol_Text), valText);
+
+		changed |= HandleCommonInteractions();
+	}
+
+	ImGui::PopID();
+	return changed;
+}
 
 void ContinuousParameter::CheckTypingStart(ImGuiID currentID) {
 	if (IsSelected() && s_TypingID == 0) {

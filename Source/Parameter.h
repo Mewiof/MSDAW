@@ -18,6 +18,11 @@ public:
 	// returns true if value changed
 	virtual bool Draw() = 0;
 
+	// compact single-row variant for tight horizontal strips (e.g. the transport bar):
+	// a fixed-width framed value box, no label line. base default is a no-op so this can
+	// be called through a Parameter* even for subclasses that do not implement it
+	virtual bool DrawCompact(float width, const char* valueFmt) { return false; }
+
 	// e.g., double-click to reset or right-click for the context menu
 	bool HandleCommonInteractions();
 

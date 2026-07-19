@@ -4,6 +4,7 @@
 #include "Transport.h"
 #include "Parameter.h"
 #include "Theme.h"
+#include <cmath>
 
 void TransportView::Render(const ImVec2& pos, float width, float height) {
 	const Theme& th = Theme::Instance();
@@ -68,46 +69,33 @@ void TransportView::Render(const ImVec2& pos, float width, float height) {
 		ImGui::Text("| Time: %.2f", (double)transport->GetPosition() / transport->GetSampleRate());
 		ImGui::SameLine();
 
-		// bpm
-		float bpm = (float)transport->GetBpm();
-		ImGui::SetNextItemWidth(60 * mContext.state.mainScale);
-		if (ImGui::DragFloat("BPM", &bpm, 1.0f, 40.0f, 300.0f, "%.1f"))
-			if (mContext.GetProject()) {
-				mContext.GetProject()->SetBpm(bpm);
-			}
+		// bpm - reuse the master track's BPM parameter so tempo edits are undoable and
+		// round-trip through the transport (Project::ProcessBlock syncs mBpmParam->value)
+		ImGui::AlignTextToFramePadding();
+		ImGui::Text("BPM");
+		ImGui::SameLine();
+		if (std::shared_ptr<Track> master = project->GetMasterTrack())
+			if (Parameter* bpmParam = master->GetBpmParameter())
+				bpmParam->DrawCompact(58 * mContext.state.mainScale, "%.1f");
 
 		ImGui::SameLine();
-
+		ImGui::AlignTextToFramePadding();
 		ImGui::Text("Grid");
 		ImGui::SameLine();
-
-		// numerator
-		ImGui::SetNextItemWidth(30 * mContext.state.mainScale);
-		bool gridChanged = false;
-		if (ImGui::DragInt("##GridNum", &mContext.state.timelineGridNumerator, 0.2f, 1, 64))
-			gridChanged = true;
-
+		mGridNumParam->DrawCompact(30 * mContext.state.mainScale, "%.0f");
 		ImGui::SameLine();
+		ImGui::AlignTextToFramePadding();
 		ImGui::Text("/");
 		ImGui::SameLine();
+		mGridDenParam->DrawCompact(30 * mContext.state.mainScale, "%.0f");
 
-		// denominator
-		ImGui::SetNextItemWidth(30 * mContext.state.mainScale);
-		if (ImGui::DragInt("##GridDen", &mContext.state.timelineGridDenominator, 0.2f, 1, 128))
-			gridChanged = true;
-
-		// update
-		if (gridChanged) {
-			if (mContext.state.timelineGridNumerator < 1)
-				mContext.state.timelineGridNumerator = 1;
-			if (mContext.state.timelineGridDenominator < 1)
-				mContext.state.timelineGridDenominator = 1;
-			mContext.state.timelineGrid = (double)mContext.state.timelineGridNumerator / (double)mContext.state.timelineGridDenominator;
-		}
-
-		// TODO: remove this
-		if (ImGui::IsItemHovered())
-			ImGui::SetTooltip("Grid value: %.4f", mContext.state.timelineGrid);
+		// derive the snap ratio from the (integer) grid fields every frame so undo/redo of
+		// the fields propagates back into the timeline grid
+		int gridNum = std::max(1, (int)std::lround(mGridNumParam->value));
+		int gridDen = std::max(1, (int)std::lround(mGridDenParam->value));
+		mContext.state.timelineGridNumerator = gridNum;
+		mContext.state.timelineGridDenominator = gridDen;
+		mContext.state.timelineGrid = (double)gridNum / (double)gridDen;
 
 		// computer MIDI keyboard toggle
 		ImGui::SameLine();

@@ -370,6 +370,9 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 						curve->points[closestIdx].selected = true;
 					}
 				}
+				// remember which point the menu targets so its Beat/Value fields survive
+				// across the frames the popup is open
+				interaction.autoContextPointIndex = closestIdx;
 				ImGui::OpenPopup("AutomationContext");
 			}
 		}
@@ -400,6 +403,43 @@ void TimelineAutomationRenderer::Render(EditorContext& context, TimelineInteract
 		// context menu logic
 		if (ImGui::BeginPopup("AutomationContext")) {
 			std::vector<AutomationPoint> menuBefore = curve->points; // undo baseline
+
+			// exact numeric entry for the right-clicked point. EnterReturnsTrue so a change
+			// commits once (one undo entry, captured by the menuBefore diff below), not per
+			// keystroke
+			int ci = interaction.autoContextPointIndex;
+			if (ci >= 0 && ci < (int)curve->points.size()) {
+				double editBeat = curve->points[ci].beat;
+				float editValue = curve->points[ci].value;
+				bool applied = false;
+
+				ImGui::SetNextItemWidth(110 * context.state.mainScale);
+				if (ImGui::InputDouble("Beat", &editBeat, 0.0, 0.0, "%.3f", ImGuiInputTextFlags_EnterReturnsTrue)) {
+					curve->points[ci].beat = editBeat < 0.0 ? 0.0 : editBeat;
+					applied = true;
+				}
+				ImGui::SetNextItemWidth(110 * context.state.mainScale);
+				if (ImGui::InputFloat("Value", &editValue, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_EnterReturnsTrue)) {
+					curve->points[ci].value = std::clamp(editValue, minVal, maxVal);
+					applied = true;
+				}
+				ImGui::TextDisabled("range %.2f .. %.2f", minVal, maxVal);
+
+				if (applied) {
+					// a beat edit can reorder the curve; re-sort then re-find this point by identity
+					double wb = curve->points[ci].beat;
+					float wv = curve->points[ci].value;
+					t->SortAutomationPoints(t->mSelectedAutomationParam);
+					for (int k = 0; k < (int)curve->points.size(); ++k) {
+						if (curve->points[k].beat == wb && curve->points[k].value == wv) {
+							interaction.autoContextPointIndex = k;
+							break;
+						}
+					}
+				}
+				ImGui::Separator();
+			}
+
 			if (ImGui::Selectable("Copy")) {
 				context.state.automationClipboard.clear();
 				std::vector<AutomationPoint> sortedSel;
