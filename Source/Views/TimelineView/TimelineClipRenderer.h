@@ -6,11 +6,12 @@
 
 class TimelineClipRenderer {
 public:
-	// standard render call
+	// standard render call. rowHeight is this track's visible lane height (shrinks for
+	// a minimized/collapsed track), so clips draw to fit the row
 	static void Render(EditorContext& context, TimelineInteractionState& interaction,
 					   PendingClipMove& pendingMove, PendingClipDelete& pendingDelete,
 					   Track* track, int trackIndex,
-					   const ImVec2& winPos, float contentWidth, float viewWidth, float scrollX, float yPos);
+					   const ImVec2& winPos, float contentWidth, float viewWidth, float scrollX, float yPos, float rowHeight);
 
 	// static helper to draw visual content of a clip (used for the ghost clip preview in trackview)
 	// single source of truth for clip rendering

@@ -564,6 +564,7 @@ void Track::Save(std::ostream& out, int trackIndex) {
 	out << "MUTE " << (mMute ? 1 : 0) << "\n";
 	out << "SOLO " << (mSolo ? 1 : 0) << "\n";
 	out << "GROUP " << (mIsGroup ? 1 : 0) << "\n";
+	out << "COLLAPSED " << (mIsCollapsed ? 1 : 0) << "\n";
 
 	for (auto& proc : mProcessors) {
 		out << "PROCESSOR " << proc->GetProcessorId() << "\n";
@@ -634,6 +635,10 @@ void Track::Load(std::istream& in) {
 			int val;
 			ss >> val;
 			mIsGroup = (val != 0);
+		} else if (token == "COLLAPSED") {
+			int val;
+			ss >> val;
+			mIsCollapsed = (val != 0);
 		} else if (token == "PARENT_IDX") {
 			ss >> mLoadedParentIndex;
 		} else if (token == "PROCESSOR") {

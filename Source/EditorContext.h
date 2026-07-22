@@ -17,7 +17,8 @@ struct EditorLayout {
 	float libraryWidth = 200.0f;
 	float trackListWidth = 240.0f;
 	float trackRowHeight = 80.0f;
-	float trackGap = 0.0f; // TODO: remove this?
+	float trackCollapsedHeight = 22.0f; // height of a minimized (collapsed) track row
+	float trackGap = 0.0f;				// TODO: remove this?
 
 	void Scale(float scale) {
 		transportHeight *= scale;
@@ -25,6 +26,7 @@ struct EditorLayout {
 		libraryWidth *= scale;
 		trackListWidth *= scale;
 		trackRowHeight *= scale;
+		trackCollapsedHeight *= scale;
 		trackGap *= scale;
 	}
 };

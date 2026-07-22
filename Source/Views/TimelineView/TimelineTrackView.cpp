@@ -10,6 +10,7 @@
 
 #include "TimelineClipRenderer.h"
 #include "TimelineAutomationRenderer.h"
+#include "TrackLayout.h"
 #include "Theme.h"
 
 void TimelineTrackView::RenderTracks(EditorContext& context, TimelineInteractionState& interaction,
@@ -20,14 +21,16 @@ void TimelineTrackView::RenderTracks(EditorContext& context, TimelineInteraction
 	Project* project = context.GetProject();
 	auto& tracks = project->GetTracks();
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
-	float rowFullHeight = context.layout.trackRowHeight + context.layout.trackGap;
+	auto rows = TrackLayout::Build(context);
 
 	for (size_t i = 0; i < tracks.size(); ++i) {
-		float yPos = startY + (i * rowFullHeight);
+		if (!rows[i].visible)
+			continue; // hidden inside a folded group
+		float yPos = startY + rows[i].top;
+		float rowH = rows[i].height;
 		auto& t = tracks[i];
 		ImVec2 trackMin(winPos.x, yPos);
-		// draw background for the full height including gap
-		ImVec2 trackMax(winPos.x + contentWidth, yPos + rowFullHeight);
+		ImVec2 trackMax(winPos.x + contentWidth, yPos + rowH);
 
 		// track background
 		drawList->AddRectFilled(trackMin, trackMax, th.bgWindow);
@@ -63,8 +66,7 @@ void TimelineTrackView::RenderTracks(EditorContext& context, TimelineInteraction
 		ImGui::SetCursorScreenPos(ImVec2(winPos.x + scrollX, trackMin.y));
 		ImGui::PushID((int)i * 20000);
 		ImGui::SetNextItemAllowOverlap();
-		// button also covers the gap
-		ImGui::InvisibleButton("##TrackDropTarget", ImVec2(viewWidth, rowFullHeight));
+		ImGui::InvisibleButton("##TrackDropTarget", ImVec2(viewWidth, rowH));
 
 		if (ImGui::BeginDragDropTarget()) {
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("PROCESSOR_MOVE")) {
@@ -123,10 +125,12 @@ void TimelineTrackView::RenderTracks(EditorContext& context, TimelineInteraction
 		ImGui::SetCursorScreenPos(trackMin);
 		ImGui::PushID((int)i * 10000);
 
-		if (t->mShowAutomation) {
+		// a minimized (thin) track shows its clip lane rather than a cramped automation lane
+		bool minimized = t->mIsCollapsed && !t->IsGroup();
+		if (t->mShowAutomation && !minimized) {
 			TimelineAutomationRenderer::Render(context, interaction, t.get(), (int)i, winPos, contentWidth, viewWidth, scrollX, yPos);
 		} else {
-			TimelineClipRenderer::Render(context, interaction, pendingMove, pendingDelete, t.get(), (int)i, winPos, contentWidth, viewWidth, scrollX, yPos);
+			TimelineClipRenderer::Render(context, interaction, pendingMove, pendingDelete, t.get(), (int)i, winPos, contentWidth, viewWidth, scrollX, yPos, rowH);
 		}
 
 		ImGui::PopID(); // track id
@@ -149,9 +153,8 @@ void TimelineTrackView::RenderTracks(EditorContext& context, TimelineInteraction
 			ghostTrackIdx = interaction.dragSourceTrackIdx;
 		}
 
-		if (ghostTrackIdx >= 0 && ghostTrackIdx < (int)project->GetTracks().size()) {
-			float rowFullHeight = context.layout.trackRowHeight + context.layout.trackGap;
-			float ghostY = startY + (ghostTrackIdx * rowFullHeight);
+		if (ghostTrackIdx >= 0 && ghostTrackIdx < (int)rows.size() && rows[ghostTrackIdx].visible) {
+			float ghostY = startY + rows[ghostTrackIdx].top;
 
 			float clipStartX = winPos.x + (float)(ghostStart * context.state.pixelsPerBeat);
 			float clipWidth = (float)(ghostDuration * context.state.pixelsPerBeat);
@@ -159,7 +162,7 @@ void TimelineTrackView::RenderTracks(EditorContext& context, TimelineInteraction
 
 			// calculate target rect
 			ImVec2 pMin(clipStartX, ghostY + 1);
-			ImVec2 pMax(clipEndX, ghostY + context.layout.trackRowHeight - 1);
+			ImVec2 pMax(clipEndX, ghostY + rows[ghostTrackIdx].height - 1);
 
 			// use highlight color for preview
 			ImU32 ghostColor = th.ghost;

@@ -6,6 +6,7 @@
 #include "Processors/VST3Processor.h"
 #include "Undo/Actions.h"
 #include "Theme.h"
+#include "TimelineView/TrackLayout.h"
 #include <algorithm>
 #include <vector>
 #include <cmath>
@@ -25,10 +26,38 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 
 	float headerHeight = 34 * mContext.state.mainScale; // match TimelineView's rulerHeight so the header strip lines up with the ruler
-	float rowFullHeight = mContext.layout.trackRowHeight + mContext.layout.trackGap;
-	float hScrollbarSize = ImGui::GetStyle().ScrollbarSize;
 
 	auto& tracks = project->GetTracks();
+
+	// per-track vertical bands (variable height: collapsed tracks shrink, folded groups hide children)
+	auto rows = TrackLayout::Build(mContext);
+
+	float txtH = ImGui::GetTextLineHeight();
+
+	// draws a fold/collapse caret (down when expanded, right when collapsed) as an
+	// overlapping button; returns true on click
+	auto DrawCaret = [&](const char* id, float x, float y, float w, float h, bool open) -> bool {
+		ImGui::SetCursorScreenPos(ImVec2(x, y));
+		ImGui::SetNextItemAllowOverlap();
+		bool clicked = ImGui::InvisibleButton(id, ImVec2(w, h));
+		ImU32 col = ImGui::IsItemHovered() ? th.text : th.textMuted;
+		float cx = x + w * 0.5f;
+		float cy = y + h * 0.5f;
+		float r = h * 0.28f;
+		if (open)
+			drawList->AddTriangleFilled(ImVec2(cx - r, cy - r * 0.6f), ImVec2(cx + r, cy - r * 0.6f), ImVec2(cx, cy + r * 0.7f), col);
+		else
+			drawList->AddTriangleFilled(ImVec2(cx - r * 0.6f, cy - r), ImVec2(cx - r * 0.6f, cy + r), ImVec2(cx + r * 0.7f, cy), col);
+		return clicked;
+	};
+
+	auto LinToNorm = [](float val) -> float {
+		if (val <= 0.0001f)
+			return 0.0f;
+		float db = 20.0f * std::log10(val);
+		float norm = (db + 60.0f) / 60.0f;
+		return std::clamp(norm, 0.0f, 1.0f);
+	};
 
 	int trackToProcess = -1;
 	enum Action { None,
@@ -44,9 +73,16 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 		ImGui::PushID((int)i);
 		auto track = tracks[i];
 
-		float curY = trackAreaStartY + i * rowFullHeight;
+		// skip tracks hidden inside a folded group
+		if (!rows[i].visible) {
+			ImGui::PopID();
+			continue;
+		}
 
-		if (curY + rowFullHeight < stickyY + headerHeight || curY > masterY) {
+		float rowH = rows[i].height;
+		float curY = trackAreaStartY + rows[i].top;
+
+		if (curY + rowH < stickyY + headerHeight || curY > masterY) {
 			ImGui::PopID();
 			continue;
 		}
@@ -70,64 +106,36 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 		if (mContext.state.multiSelectedTracks.count((int)i))
 			isTrackSelected = true;
 
-		ImVec2 curPos = ImVec2(fixedPos.x, curY + 4.0f);
+		float s = mContext.state.mainScale;
 
 		float indent = 0.0f;
 		if (track->GetParent()) {
-			indent = 15.0f * mContext.state.mainScale;
+			indent = 15.0f * s;
 			auto p = track->GetParent();
 			while (p->GetParent()) {
-				indent += 15.0f * mContext.state.mainScale;
+				indent += 15.0f * s;
 				p = p->GetParent();
 			}
 		}
 
-		// ---- row layout: three stacked bands that mathematically fit inside trackRowHeight ----
-		// derived from live font/frame metrics so every element scales together and nothing
-		// spills into the gap below the row
-		float s = mContext.state.mainScale;
-		float txtH = ImGui::GetTextLineHeight();
-		float frmH = ImGui::GetFrameHeight();
-		float rowH = mContext.layout.trackRowHeight;
+		bool minimized = track->mIsCollapsed && !track->IsGroup();
 
-		float contentX = curPos.x + indent + 15 * s; // just right of the colour strip
-
-		// level meter: tall bar pinned to the right edge for the full row height
-		float meterW = 6 * s;
-		float meterX = curPos.x + width - meterW - 4 * s;
-		float meterTop = curPos.y + 4 * s;
-		float meterH = rowH - 8 * s;
-
-		// close button in the top-right corner, just left of the meter
-		float closeSz = 15 * s;
-		float closeX = meterX - closeSz - 6 * s;
-		float closeY = curPos.y + 4 * s;
-
-		// vertical band origins (name / mute-solo-auto / volume-pan); the mixer band is one
-		// frame tall and ends at 52 + frmH ≈ 74 < rowH, leaving clean bottom padding
-		float yName = curPos.y + 6 * s;
-		float yButtons = curPos.y + 29 * s;
-		float yMixer = curPos.y + 52 * s;
-
+		// ---- shared row surface: background, colour strip, selection + drag/drop ----
 		ImU32 bgCol = isTrackSelected ? th.bgActive : th.bgPanel;
 		if (track->IsGroup())
 			bgCol = isTrackSelected ? th.bgActive : th.bgPanelAlt; // groups read as slightly raised containers
 
-		drawList->AddRectFilled(
-			ImVec2(curPos.x + indent, curPos.y),
-			ImVec2(curPos.x + width, curPos.y + mContext.layout.trackRowHeight),
-			bgCol);
+		drawList->AddRectFilled(ImVec2(fixedPos.x + indent, curY), ImVec2(fixedPos.x + width, curY + rowH), bgCol);
+		drawList->AddRectFilled(ImVec2(fixedPos.x + indent, curY), ImVec2(fixedPos.x + indent + 6 * s, curY + rowH), track->GetColor());
 
-		ImU32 stripCol = track->GetColor();
-		drawList->AddRectFilled(
-			ImVec2(curPos.x + indent, curPos.y),
-			ImVec2(curPos.x + indent + 6 * mContext.state.mainScale, curPos.y + mContext.layout.trackRowHeight),
-			stripCol);
+		float meterW = 6 * s;
+		float meterX = fixedPos.x + width - meterW - 4 * s;
 
-		ImGui::SetCursorScreenPos(ImVec2(curPos.x + indent, curPos.y));
+		ImGui::SetCursorScreenPos(ImVec2(fixedPos.x + indent, curY));
 		ImGui::SetNextItemAllowOverlap();
 
-		if (ImGui::InvisibleButton("TrackSelect", ImVec2(width - indent - 45 * mContext.state.mainScale, mContext.layout.trackRowHeight))) {
+		float selW = width - indent - (minimized ? 12 * s : 45 * s);
+		if (ImGui::InvisibleButton("TrackSelect", ImVec2(selW, rowH))) {
 			if (ImGui::GetIO().KeyCtrl) {
 				if (mContext.state.multiSelectedTracks.count((int)i)) {
 					mContext.state.multiSelectedTracks.erase((int)i);
@@ -220,6 +228,12 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 				}
 				ImGui::EndMenu();
 			}
+			// fold (groups) / minimize (tracks) toggle
+			const char* collapseLabel = track->IsGroup()
+											? (track->mIsCollapsed ? "Unfold" : "Fold")
+											: (track->mIsCollapsed ? "Restore Height" : "Minimize");
+			if (ImGui::MenuItem(collapseLabel))
+				track->mIsCollapsed = !track->mIsCollapsed;
 			ImGui::Separator();
 			if (ImGui::MenuItem("Delete")) {
 				trackToProcess = (int)i;
@@ -241,11 +255,60 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 			ImGui::EndPopup();
 		}
 
+		// ---- compact (minimized) row: caret + name + small meter ----
+		if (minimized) {
+			float caretX = fixedPos.x + indent + 6 * s;
+			float caretW = 14 * s;
+			float rowCenterY = curY + (rowH - txtH) * 0.5f;
+			if (DrawCaret("##Caret", caretX, rowCenterY, caretW, txtH, !track->mIsCollapsed))
+				track->mIsCollapsed = !track->mIsCollapsed;
+
+			float nameX = caretX + caretW + 2 * s;
+			ImGui::PushClipRect(ImVec2(nameX, curY), ImVec2(meterX - 4 * s, curY + rowH), true);
+			drawList->AddText(ImVec2(nameX, rowCenterY), th.text, track->GetName().c_str());
+			ImGui::PopClipRect();
+
+			// slim level meter on the right edge
+			float meterTop = curY + 3 * s;
+			float meterH = rowH - 6 * s;
+			float normL = LinToNorm(track->GetPeakL());
+			float normR = LinToNorm(track->GetPeakR());
+			drawList->AddRectFilled(ImVec2(meterX, meterTop), ImVec2(meterX + meterW, meterTop + meterH), th.meterBg);
+			drawList->AddRectFilled(ImVec2(meterX, meterTop + meterH - normL * meterH), ImVec2(meterX + meterW * 0.5f, meterTop + meterH), th.MeterColor(normL));
+			drawList->AddRectFilled(ImVec2(meterX + meterW * 0.5f, meterTop + meterH - normR * meterH), ImVec2(meterX + meterW, meterTop + meterH), th.MeterColor(normR));
+
+			ImGui::PopID();
+			continue;
+		}
+
+		// ---- full row: three stacked bands that fit inside trackRowHeight ----
+		ImVec2 curPos = ImVec2(fixedPos.x, curY + 4.0f);
+
+		float frmH = ImGui::GetFrameHeight();
+
+		float contentX = curPos.x + indent + 22 * s; // right of the colour strip + caret column
+
+		float meterTop = curPos.y + 4 * s;
+		float meterH = mContext.layout.trackRowHeight - 8 * s;
+
+		// close button in the top-right corner, just left of the meter
+		float closeSz = 15 * s;
+		float closeX = meterX - closeSz - 6 * s;
+		float closeY = curPos.y + 4 * s;
+
+		float yName = curPos.y + 6 * s;
+		float yButtons = curPos.y + 29 * s;
+		float yMixer = curPos.y + 52 * s;
+
+		// fold/minimize caret in the reserved column left of the name
+		if (DrawCaret("##Caret", curPos.x + indent + 6 * s, yName, 14 * s, txtH, !track->mIsCollapsed))
+			track->mIsCollapsed = !track->mIsCollapsed;
+
 		ImGui::SetCursorScreenPos(ImVec2(contentX, yName));
 
 		if (mRenamingIndex == (int)i) {
 			ImGui::SetKeyboardFocusHere();
-			ImGui::SetNextItemWidth(120 * mContext.state.mainScale);
+			ImGui::SetNextItemWidth(120 * s);
 			if (ImGui::InputText("##Rename", mRenameBuf, 256, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
 				track->SetName(mRenameBuf);
 				mRenamingIndex = -1;
@@ -341,19 +404,8 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 		DrawLabeledParam("Vol", track->GetVolumeParameter(), mixerX);
 		DrawLabeledParam("Pan", track->GetPanParameter(), mixerX + mixerHalfW + mixerGap);
 
-		float peakL = track->GetPeakL();
-		float peakR = track->GetPeakR();
-
-		auto LinToNorm = [](float val) -> float {
-			if (val <= 0.0001f)
-				return 0.0f;
-			float db = 20.0f * std::log10(val);
-			float norm = (db + 60.0f) / 60.0f;
-			return std::clamp(norm, 0.0f, 1.0f);
-		};
-
-		float normL = LinToNorm(peakL);
-		float normR = LinToNorm(peakR);
+		float normL = LinToNorm(track->GetPeakL());
+		float normR = LinToNorm(track->GetPeakR());
 		float hL = normL * meterH;
 		float hR = normR * meterH;
 
@@ -370,7 +422,7 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 		ImGui::PopID();
 	}
 
-	ImGui::SetCursorScreenPos(ImVec2(fixedPos.x, trackAreaStartY + tracks.size() * rowFullHeight));
+	ImGui::SetCursorScreenPos(ImVec2(fixedPos.x, trackAreaStartY + TrackLayout::TotalHeight(rows)));
 	ImGui::InvisibleButton("##ReorderGapEnd", ImVec2(width, 10.0f));
 	if (ImGui::BeginDragDropTarget()) {
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TRACK_MOVE")) {
@@ -468,7 +520,6 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 
 		// mirror the per-track band layout so master lines up with the tracks above it
 		float s = mContext.state.mainScale;
-		float txtH = ImGui::GetTextLineHeight();
 		float frmH = ImGui::GetFrameHeight();
 
 		float contentX = curPos.x + 12 * s;
@@ -513,19 +564,8 @@ void TrackListView::Render(const ImVec2& fixedPos, float width, float height, fl
 		DrawLabeledParam("Vol", master->GetVolumeParameter(), mixerX);
 		DrawLabeledParam("Pan", master->GetPanParameter(), mixerX + mixerHalfW + mixerGap);
 
-		float peakL = master->GetPeakL();
-		float peakR = master->GetPeakR();
-
-		auto LinToNorm = [](float val) -> float {
-			if (val <= 0.0001f)
-				return 0.0f;
-			float db = 20.0f * std::log10(val);
-			float norm = (db + 60.0f) / 60.0f;
-			return std::clamp(norm, 0.0f, 1.0f);
-		};
-
-		float normL = LinToNorm(peakL);
-		float normR = LinToNorm(peakR);
+		float normL = LinToNorm(master->GetPeakL());
+		float normR = LinToNorm(master->GetPeakR());
 		float hL = normL * meterH;
 		float hR = normR * meterH;
 

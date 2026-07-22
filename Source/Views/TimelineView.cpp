@@ -13,6 +13,7 @@
 #include "TimelineView/TimelineRuler.h"
 #include "TimelineView/TimelineTrackView.h"
 #include "TimelineView/TimelineAutomationRenderer.h"
+#include "TimelineView/TrackLayout.h"
 #include "Theme.h"
 
 void TimelineView::Render(const ImVec2& pos, float width, float height, TrackListView* trackListView, float trackListW) {
@@ -213,8 +214,9 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 
 		float rulerHeight = 34.0f * mContext.state.mainScale;
 		float trackAreaStartY = winPos.y + rulerHeight;
-		float rowFullHeight = mContext.layout.trackRowHeight + mContext.layout.trackGap;
-		float fullContentHeight = tracks.size() * rowFullHeight + 200.0f;
+		// per-track vertical bands, shared with the track-list column so collapse/fold stay in sync
+		auto rows = TrackLayout::Build(mContext);
+		float fullContentHeight = TrackLayout::TotalHeight(rows) + 200.0f;
 
 		// dynamic content width calculation
 		double maxBeat = 100.0;
@@ -315,7 +317,8 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 
 			if (insideTimeline) {
 				float relY = mContext.state.dropY - trackAreaStartY;
-				int trackIndex = (int)(relY / rowFullHeight);
+				// only accept a drop that lands on an actual track row (not empty space below)
+				int trackIndex = (relY >= 0.0f && relY < TrackLayout::TotalHeight(rows)) ? TrackLayout::RowAtY(rows, relY) : -1;
 				float relX = mContext.state.dropX - winPos.x;
 				double startBeat = (double)relX / mContext.state.pixelsPerBeat;
 				if (startBeat < 0)
@@ -402,7 +405,7 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 
 			if (insideTimeline) {
 				float relY = mContext.state.osDragY - trackAreaStartY;
-				int trackIndex = (int)(relY / rowFullHeight);
+				int trackIndex = (relY >= 0.0f && relY < TrackLayout::TotalHeight(rows)) ? TrackLayout::RowAtY(rows, relY) : -1;
 
 				float relX = mContext.state.osDragX - winPos.x;
 				double startBeat = (double)relX / mContext.state.pixelsPerBeat;
@@ -414,8 +417,8 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 				if (trackIndex >= 0 && trackIndex < (int)tracks.size()) {
 					// draw insertion marker (instead of fake box)
 					float ghostX = winPos.x + (float)(startBeat * mContext.state.pixelsPerBeat);
-					float ghostY = trackAreaStartY + (trackIndex * rowFullHeight);
-					float ghostH = mContext.layout.trackRowHeight;
+					float ghostY = trackAreaStartY + rows[trackIndex].top;
+					float ghostH = rows[trackIndex].height;
 
 					// vertical line
 					drawList->AddLine(ImVec2(ghostX, ghostY), ImVec2(ghostX, ghostY + ghostH), th.dropLine, 4.0f);
@@ -466,7 +469,7 @@ void TimelineView::Render(const ImVec2& pos, float width, float height, TrackLis
 		float hScrollbarSize = ImGui::GetStyle().ScrollbarSize;
 		float masterY = pos.y + height - masterHeight - hScrollbarSize;
 
-		ImGui::SetCursorScreenPos(ImVec2(winPos.x, trackAreaStartY + tracks.size() * rowFullHeight));
+		ImGui::SetCursorScreenPos(ImVec2(winPos.x, trackAreaStartY + TrackLayout::TotalHeight(rows)));
 		ImGui::Dummy(ImVec2(contentWidth, masterPadding));
 
 		if (master && master->mShowAutomation) {

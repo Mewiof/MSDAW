@@ -1,6 +1,7 @@
 #include "PrecompHeader.h"
 #include "TimelineClipRenderer.h"
 #include "TimelineUtils.h"
+#include "TrackLayout.h"
 #include "Clips/AudioClip.h"
 #include "Clips/MIDIClip.h"
 #include "Project.h"
@@ -11,7 +12,7 @@
 void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionState& interaction,
 								  PendingClipMove& pendingMove, PendingClipDelete& pendingDelete,
 								  Track* t, int trackIndex,
-								  const ImVec2& winPos, float contentWidth, float viewWidth, float scrollX, float yPos) {
+								  const ImVec2& winPos, float contentWidth, float viewWidth, float scrollX, float yPos, float rowHeight) {
 
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	Project* project = context.GetProject();
@@ -23,8 +24,7 @@ void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionSta
 
 	ImGui::SetCursorScreenPos(ImVec2(winPos.x + scrollX, yPos));
 	ImGui::SetNextItemAllowOverlap();
-	float fullRowHeight = context.layout.trackRowHeight + context.layout.trackGap;
-	if (ImGui::InvisibleButton(("##TrackBG" + std::to_string(trackIndex)).c_str(), ImVec2(viewWidth, fullRowHeight))) {
+	if (ImGui::InvisibleButton(("##TrackBG" + std::to_string(trackIndex)).c_str(), ImVec2(viewWidth, rowHeight))) {
 		context.state.selectedClip = nullptr;
 		context.state.selectedTrackIndex = trackIndex;
 	}
@@ -78,13 +78,13 @@ void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionSta
 
 		if (clipEndX > winPos.x && clipStartX < winPos.x + viewWidth + scrollX) {
 			ImVec2 pMin(clipStartX, yPos + 1);
-			ImVec2 pMax(clipEndX, yPos + context.layout.trackRowHeight - 1);
+			ImVec2 pMax(clipEndX, yPos + rowHeight - 1);
 
 			ImGui::SetCursorScreenPos(pMin);
 			ImGui::PushID(clip.get());
 
 			ImGui::SetNextItemAllowOverlap();
-			ImGui::InvisibleButton("##ClipHit", ImVec2(clipWidth, context.layout.trackRowHeight - 2));
+			ImGui::InvisibleButton("##ClipHit", ImVec2(clipWidth, rowHeight - 2));
 
 			if (ImGui::BeginPopupContextItem()) {
 				if (ImGui::Selectable("Copy")) {
@@ -177,19 +177,18 @@ void TimelineClipRenderer::Render(EditorContext& context, TimelineInteractionSta
 
 					interaction.dragCurrentBeat = newStart;
 
-					// 2. calculate target track
+					// 2. calculate target track (accounts for variable row heights /
+					// collapsed lanes via the shared layout)
 					if (project) {
-						float trackListY = yPos - (trackIndex * (context.layout.trackRowHeight + context.layout.trackGap));
-						float mouseAbsY = ImGui::GetMousePos().y;
-						float relY = mouseAbsY - trackListY;
-						int targetIdx = (int)(relY / (context.layout.trackRowHeight + context.layout.trackGap));
-
-						int maxTracks = (int)project->GetTracks().size();
-						if (targetIdx < 0)
-							targetIdx = 0;
-						if (targetIdx >= maxTracks)
-							targetIdx = maxTracks - 1;
-						interaction.dragTargetTrackIdx = targetIdx;
+						auto rows = TrackLayout::Build(context);
+						if (trackIndex >= 0 && trackIndex < (int)rows.size()) {
+							float trackAreaTop = yPos - rows[trackIndex].top;
+							float relY = ImGui::GetMousePos().y - trackAreaTop;
+							int targetIdx = TrackLayout::RowAtY(rows, relY);
+							if (targetIdx < 0)
+								targetIdx = trackIndex;
+							interaction.dragTargetTrackIdx = targetIdx;
+						}
 					}
 
 				} else if (interaction.dragState == DragState::ResizingRight) {
